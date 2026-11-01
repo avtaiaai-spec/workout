@@ -440,6 +440,54 @@ main {
   margin: 0 auto;
   padding: 28px var(--page-gutter) 48px;
 }
+.update-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  margin: 16px var(--page-gutter) 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--raised);
+}
+.update-notice > div {
+  flex: 1;
+  min-width: 0;
+}
+.update-notice strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.update-notice p {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.update-notice .button {
+  flex-shrink: 0;
+}
+@media (max-width: 740px) {
+  .update-notice {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    gap: 8px;
+    padding: 12px;
+  }
+  .update-notice > div {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .update-notice > .button {
+    grid-column: 1/-1;
+    grid-row: 2;
+    justify-self: start;
+  }
+  .update-notice > .icon-button {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+  }
+}
 .page-tools {
   position: absolute;
   top: 23px;
@@ -451,7 +499,7 @@ main {
 }
 main > .page-tools ~ .section-heading:not(.small),
 main > div > .section-heading:first-of-type {
-  padding-right: 96px;
+  padding-right: 52px;
   min-height: 44px;
 }
 /* Page actions share the title row; there is no separate mobile masthead. */
@@ -2233,7 +2281,7 @@ td small {
 }
 .measurement-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin: 20px 0;
 }
@@ -2548,6 +2596,202 @@ td small {
   font-size: 13px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+.current-exercise-heading {
+  margin: 20px 0 8px;
+}
+.current-exercise-heading > small {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.current-exercise-heading h1 {
+  font-size: 25px;
+  line-height: 1.2;
+}
+.exercise-plan-summary {
+  border-block: 1px solid var(--border);
+  padding: 6px 0 10px;
+  margin: 12px 0 20px;
+}
+.exercise-plan-summary h2 {
+  font-size: 15px;
+}
+.exercise-plan-summary > p {
+  font-size: 15px;
+  margin: 4px 0;
+  font-variant-numeric: tabular-nums;
+}
+.exercise-plan-summary > small {
+  font-size: 13px;
+}
+.exercise-plan-summary summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--text);
+}
+.exercise-plan-summary summary > span {
+  flex: 1;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.exercise-plan-summary summary > em {
+  color: var(--accent-text);
+  font-size: 13px;
+}
+.recorded-sets {
+  margin: 20px 0;
+}
+.recorded-sets .section-heading {
+  margin-bottom: 8px;
+}
+.empty-approaches {
+  padding: 12px 0;
+  font-size: 14px;
+}
+.recorded-set {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.recorded-set-index {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--accent-light);
+  color: var(--accent-text);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.recorded-set-value {
+  flex: 1;
+  min-width: 0;
+}
+.recorded-set-value strong {
+  font-size: 18px;
+  font-weight: 500;
+}
+.recorded-set-value small {
+  display: block;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  margin-top: 3px;
+}
+.add-recorded-set {
+  margin-top: 14px;
+  width: 100%;
+  min-height: 52px;
+}
+.add-recorded-set > span {
+  font-size: 16px;
+}
+.add-recorded-set > small {
+  margin-left: auto;
+  color: inherit;
+  font-size: 14px;
+  font-weight: 400;
+}
+.exercise-rest {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin: 20px 0;
+  background: var(--raised);
+}
+.exercise-rest-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.exercise-rest-heading > span {
+  flex: 1;
+  min-width: 0;
+}
+.exercise-rest-heading strong {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.exercise-rest-heading small {
+  display: block;
+  font-size: 13px;
+  margin-top: 3px;
+}
+.exercise-rest-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+}
+.exercise-rest-actions .button {
+  min-height: 44px;
+  font-size: 14px;
+  padding: 8px 12px;
+}
+.exercise-rest summary {
+  font-size: 13px;
+}
+.approach-countdown {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 15px;
+  margin: 12px 0;
+  font-variant-numeric: tabular-nums;
+}
+.approach-countdown > .text-button {
+  margin-left: auto;
+}
+.exercise-next-actions {
+  margin: 20px 0 12px;
+}
+.exercise-management {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+.exercise-session-history {
+  margin-top: 24px;
+}
+.exercise-session-history > p {
+  margin: 8px 0;
+  font-size: 14px;
+}
+.past-workout {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.past-workout h3 {
+  font-size: 15px;
+  font-weight: 500;
+}
+.past-workout > small {
+  display: block;
+  font-size: 13px;
+  margin-top: 4px;
+}
+.past-accounting {
+  display: block;
+  font-size: 12px;
+  margin: 10px 0 6px;
+}
+.past-workout p {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  padding: 4px 0;
+}
+.past-workout p > span {
+  color: var(--muted);
+  font-size: 13px;
+  margin-right: 8px;
 }
 .active-workout-name {
   color: var(--muted);
@@ -3121,6 +3365,7 @@ td small {
     gap: 12px;
   }
   .measurement-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
   }
   .measurement-stats .stat-icon {
@@ -3246,7 +3491,7 @@ td small {
     flex-shrink: 0;
   }
   .catalog-target {
-    padding-right: 88px;
+    padding-right: 44px;
     margin-bottom: 8px;
   }
   .template-card {

@@ -69,6 +69,7 @@ export async function finish(page: Page) {
     .getByRole("button", { name: "Меню тренировки", exact: true })
     .click();
   await page
+    .getByRole("dialog", { name: "Управление занятием", exact: true })
     .getByRole("button", { name: "Завершить тренировку", exact: true })
     .click();
   await page
@@ -120,14 +121,14 @@ export function visualState(active = false) {
       id: "body-a",
       date: shiftDate(today, -10),
       createdAt: Date.now() - 864000000,
-      values: { weight: 70.4, waist: 80.5, hips: 100 },
+      values: { weight: 70.4, chest: 96.3, waist: 80.5, hips: 100 },
       note: "Первый замер",
     },
     {
       id: "body-b",
       date: today,
       createdAt: Date.now(),
-      values: { weight: 69.2, waist: 79.4, hips: 99.6 },
+      values: { weight: 69.2, chest: 95.6, waist: 79.4, hips: 99.6 },
       note: "Второй замер",
     },
   ];

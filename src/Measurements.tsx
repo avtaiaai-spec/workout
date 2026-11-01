@@ -22,7 +22,7 @@ import {
 import { Modal, Empty } from "./ui";
 import { Chart } from "./Progress";
 import { download } from "./storage";
-const common: MeasurementKey[] = ["weight", "waist", "hips", "chest"];
+const common: MeasurementKey[] = ["weight", "chest", "waist", "hips"];
 export function Measurements() {
   const { state, change, toast } = useStore();
   const [form, setForm] = useState<Measurement | "new">();
@@ -140,7 +140,7 @@ export function Measurements() {
         )}
       </div>
       <div className="measurement-stats">
-        {(["weight", "waist", "hips"] as const).map((k) => {
+        {(["weight", "chest", "waist", "hips"] as const).map((k) => {
           const rows = records.filter((r) => r.values[k] !== undefined);
           const first = rows[0]?.values[k];
           const latest = rows.at(-1);

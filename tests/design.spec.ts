@@ -87,7 +87,12 @@ for (const [width, height] of [
       });
       await page.getByRole("button", { name: "Закрыть", exact: true }).click();
       await page.goto("/#plan");
-      await expect(page.locator(".timer-dock")).toHaveCount(0);
+      await expect(
+        page.getByRole("button", {
+          name: "Открыть таймер отдыха",
+          exact: true,
+        }),
+      ).toHaveCount(0);
       await mkdir("docs/mono-apricot", { recursive: true });
       await page.screenshot({
         path: `docs/mono-apricot/${theme}-${width}x${height}.png`,
@@ -150,6 +155,11 @@ for (const [width, height] of [
             .locator("body")
             .evaluate((el) => getComputedStyle(el).fontFamily),
         ).toContain("Segoe UI");
+        if (route === "body" && width === 390)
+          await page.screenshot({
+            path: `docs/mono-apricot/body-${theme}-390x844.png`,
+            fullPage: false,
+          });
         await page.screenshot({
           path: `test-results/mono-${theme}-${width}-${route.split("/")[0]}.png`,
           fullPage: true,
@@ -170,32 +180,42 @@ for (const [width, height] of [
       await page.goto("/#session/design-active");
       await expect(page.locator(".bottom-nav")).toHaveCount(0);
       await expect(page.locator(".sidebar")).toHaveCount(0);
-      await expect(page.locator(".current-set")).toHaveCount(1);
-      await expect(
-        page.getByRole("button", { name: /Записать подход/ }),
-      ).toBeVisible();
-      const field = page.getByLabel("Вес подхода 2", { exact: true });
+      await expect(page.locator(".recorded-set")).toHaveCount(1);
+      await expect(page.locator(".set-table")).toHaveCount(0);
+      await expect(page.locator(".exercise-rest")).toBeVisible();
+      await page
+        .getByRole("button", { name: "Изменить подход 1", exact: true })
+        .click();
+      const field = page.getByLabel("Вес подхода 1", { exact: true });
       await field.fill("27,3");
       await field.focus();
       await expect
         .poll(() =>
           field.evaluate((el) => {
             const r = el.getBoundingClientRect();
-            return (
-              r.top >=
-                document
-                  .querySelector(".session-topbar")!
-                  .getBoundingClientRect().bottom && r.bottom <= innerHeight
-            );
+            return r.top >= 0 && r.bottom <= innerHeight;
           }),
         )
         .toBe(true);
+      await page.getByRole("button", { name: "Готово", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Записать подход", exact: true })
+        .click();
+      await expect(page.locator(".recorded-set")).toHaveCount(2);
+      await expect(
+        page.getByRole("button", { name: "Записать подход", exact: true }),
+      ).toBeEnabled();
+      if (width === 390) {
+        await page.evaluate(() => scrollTo(0, 0));
+        await page.screenshot({
+          path: `docs/mono-apricot/active-${theme}-390x844.png`,
+          fullPage: false,
+        });
+      }
       await page.screenshot({
         path: `test-results/mono-${theme}-${width}-active.png`,
         fullPage: true,
       });
-      await page.getByRole("button", { name: /Записать подход/ }).click();
-      await expect(page.locator(".done-button.checked")).toHaveCount(2);
       await page.getByRole("button", { name: "Техника", exact: true }).click();
       await expect(
         page.getByRole("dialog").locator(".exercise-photo > img"),
@@ -270,14 +290,17 @@ test("раннее применение темы, выбор устройств�
     "rgb(18, 18, 18)",
   );
 });
-test("клавиатура: активное поле видно, нижняя панель не перекрывает сохранение", async ({
+test("клавиатура: исправление записанного подхода не перекрывается навигацией", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 375, height: 667 });
   await ready(page);
   await writeData(page, visualState(true));
   await page.goto("/#session/design-active");
-  const field = page.getByLabel("Вес подхода 2", { exact: true });
+  await page
+    .getByRole("button", { name: "Изменить подход 1", exact: true })
+    .click();
+  const field = page.getByLabel("Вес подхода 1", { exact: true });
   await field.fill("24,7");
   await page.evaluate(() => {
     const vv = visualViewport!;
@@ -292,11 +315,7 @@ test("клавиатура: активное поле видно, нижняя �
     .poll(() =>
       field.evaluate((el) => {
         const r = el.getBoundingClientRect();
-        return (
-          r.top >=
-            document.querySelector(".session-topbar")!.getBoundingClientRect()
-              .bottom && r.bottom <= visualViewport!.height
-        );
+        return r.top >= 0 && r.bottom <= visualViewport!.height;
       }),
     )
     .toBe(true);
@@ -305,13 +324,10 @@ test("клавиатура: активное поле видно, нижняя �
     Reflect.deleteProperty(vv, "height");
     vv.dispatchEvent(new Event("resize"));
   });
-  await field.blur();
+  await page.getByRole("button", { name: "Готово", exact: true }).click();
   await page.reload();
-  await expect(page.getByLabel("Вес подхода 2", { exact: true })).toHaveValue(
-    "24,7",
-  );
+  await expect(page.locator(".recorded-set").first()).toContainText("24,7 кг");
 });
-
 test("длинные названия и увеличение текста до 200% сохраняют доступ к действиям", async ({
   page,
 }) => {

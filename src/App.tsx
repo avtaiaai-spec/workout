@@ -7,7 +7,6 @@ import {
   Plus,
   Play,
   ChevronLeft,
-  Timer,
   ArrowUpRight,
 } from "lucide-react";
 import { useStore } from "./store";
@@ -19,7 +18,9 @@ import { WorkoutEditor } from "./Editor";
 import { TemplateEditor } from "./TemplateEditor";
 import { Measurements } from "./Measurements";
 import { Settings } from "./Settings";
-import { Timers } from "./Timers";
+import { TimerSignals } from "./Timers";
+import { ActiveWorkout } from "./ActiveWorkout";
+import { CompletedSummary } from "./CompletedSummary";
 import { Modal, Empty } from "./ui";
 import {
   Exercise,
@@ -34,11 +35,11 @@ import {
   asDate,
   clock,
   elapsed,
-  previousSet,
 } from "./model";
 import { Today } from "./Today";
 import { applyTheme } from "./theme";
 import { useViewport } from "./useViewport";
+import { AppUpdateBanner, useAppUpdates } from "./AppUpdates";
 const nav = [
   ["plan", "План", CalendarDays],
   ["journal", "Журнал", NotebookText],
@@ -50,12 +51,13 @@ const go = (route: string) => {
 };
 export default function App() {
   useViewport();
+  const { applying: applyingUpdate } = useAppUpdates();
   const { state, change, error, saving, toast } = useStore();
   const [route, setRoute] = useState(location.hash.slice(1) || "plan");
   const [info, setInfo] = useState<Exercise>();
   const [custom, setCustom] = useState(false);
   const [settings, setSettings] = useState(false);
-  const [timerOpen, setTimerOpen] = useState(false);
+  const [finishedSession, setFinishedSession] = useState<string>();
   const [plan, setPlan] = useState<{ templateId?: string; date?: string }>();
   const [choose, setChoose] = useState(false);
   const [addIds, setAddIds] = useState<string[]>();
@@ -161,7 +163,7 @@ export default function App() {
         return;
       }
     }
-    openSession(createSession(t, occurrenceId, Date.now(), state.sessions));
+    openSession(createSession(t, occurrenceId, Date.now()));
   }
   function unplanned() {
     if (active) {
@@ -209,24 +211,6 @@ export default function App() {
         .filter((e): e is Exercise => !!e)
         .map((e) => {
           const item = makeItem(e, s.settings.defaultRest);
-          if (dest.session)
-            item.sets = item.sets.map((set, index) => {
-              const previous = previousSet(
-                s.sessions,
-                item,
-                index,
-                t as Session,
-              );
-              return previous
-                ? {
-                    ...set,
-                    weight: previous.weight,
-                    reps: previous.reps,
-                    seconds: previous.seconds,
-                    distance: previous.distance,
-                  }
-                : set;
-            });
           return item;
         });
       if (t.items.length + items.length > 200) {
@@ -236,6 +220,12 @@ export default function App() {
       if (dest.replace) replaceRemainingWork(t, dest.replace, items);
       else t.items.push(...items);
       if (dest.session) {
+        for (const item of items)
+          item.plannedSets = item.sets.map((set) => ({
+            ...structuredClone(set),
+            done: false,
+            recordedAt: undefined,
+          }));
         const session = t as Session;
         const next = items[0];
         if (next) {
@@ -256,6 +246,7 @@ export default function App() {
   }
   return (
     <div
+      inert={applyingUpdate || undefined}
       className={`app-shell ${focusMode ? "focus-mode" : ""} ${active && !focusMode ? "has-resume" : ""}`}
     >
       {!focusMode && (
@@ -297,21 +288,11 @@ export default function App() {
         </aside>
       )}
       <div className="workspace">
-        <Timers
-          open={timerOpen}
-          onOpen={() => setTimerOpen(true)}
-          onClose={() => setTimerOpen(false)}
-        />
+        <AppUpdateBanner />
+        <TimerSignals />
         <main>
           {!focusMode && (
             <div className="page-tools">
-              <button
-                className="icon-button"
-                aria-label="Открыть таймер отдыха"
-                onClick={() => setTimerOpen(true)}
-              >
-                <Timer size={20} />
-              </button>
               <button
                 className="icon-button"
                 aria-label="Настройки"
@@ -406,6 +387,18 @@ export default function App() {
                 go(`catalog/template/${id}/${replace ?? ""}`);
               }}
             />
+          ) : page === "session" && active?.id === id ? (
+            <ActiveWorkout
+              key={id}
+              id={id}
+              onBack={() => go("plan")}
+              onInfo={setInfo}
+              onAdd={(replace) => {
+                setTarget({ id, session: true, replace });
+                go(`catalog/session/${id}/${replace ?? ""}`);
+              }}
+              onComplete={() => setFinishedSession(id)}
+            />
           ) : page === "session" ? (
             <WorkoutEditor
               key={id}
@@ -460,6 +453,12 @@ export default function App() {
           <b>{clock(elapsed(active, now))}</b>
           <ArrowUpRight size={17} />
         </button>
+      )}
+      {finishedSession && (
+        <CompletedSummary
+          id={finishedSession}
+          onClose={() => setFinishedSession(undefined)}
+        />
       )}
       {info && (
         <ExerciseDetail

@@ -79,6 +79,8 @@ export const itemSchema = z.object({
   exercise: exerciseSchema,
   accounting: accountingSchema,
   sets: z.array(setSchema).max(200),
+  plannedSets: z.array(setSchema).max(200).optional(),
+  restEnd: z.number().finite().min(0).nullable().optional(),
   note: z.string(),
   skipped: z.boolean(),
   remainingSkipped: z.boolean().optional(),
@@ -181,6 +183,7 @@ const currentStateSchema = z.object({
   rules: z.array(ruleSchema),
   exceptions: z.array(exceptionSchema),
   restEnd: z.number().finite().min(0).nullable(),
+  restItemId: z.string().optional(),
   effort: z
     .object({
       end: z.number().finite().min(0),
@@ -285,6 +288,12 @@ export function createSession(
       ...structuredClone(i),
       skipped: false,
       remainingSkipped: false,
+      restEnd: null,
+      plannedSets: i.sets.map((s) => ({
+        ...structuredClone(s),
+        done: false,
+        recordedAt: undefined,
+      })),
       sets: i.sets.map((set, index) => {
         const previous = previousSet(history, i, index);
         return {
@@ -652,6 +661,8 @@ export function templateFromSession(
         id: uid(),
         skipped: false,
         remainingSkipped: false,
+        plannedSets: undefined,
+        restEnd: null,
         sets: i.sets.map((s) => ({
           ...s,
           id: uid(),
@@ -704,7 +715,69 @@ export function replaceRemainingWork(
   session.items.splice(
     index,
     1,
-    ...(done.length ? [{ ...old, skipped: false, sets: done }] : []),
+    ...(done.length
+      ? [
+          {
+            ...old,
+            skipped: false,
+            sets: done,
+            plannedSets: done.map((s) => ({
+              ...structuredClone(
+                old.plannedSets?.find((p) => p.id === s.id) ?? s,
+              ),
+              done: false,
+              recordedAt: undefined,
+            })),
+          },
+        ]
+      : []),
     ...replacements,
   );
+}
+
+/** The + action records exactly one planned slot. History never changes its target. */
+export function recordPlannedSet(
+  session: Session,
+  itemId: string,
+  setId: string,
+  now = Date.now(),
+) {
+  const item = session.items.find((i) => i.id === itemId),
+    set = item?.sets.find((s) => s.id === setId);
+  if (
+    !item ||
+    !set ||
+    set.done ||
+    item.skipped ||
+    item.remainingSkipped ||
+    session.pausedAt ||
+    session.status !== "active"
+  )
+    return;
+  item.plannedSets ??= item.sets.map((s) => ({
+    ...structuredClone(s),
+    done: false,
+    recordedAt: undefined,
+  }));
+  const index = item.sets.indexOf(set);
+  const plan =
+    item.plannedSets.find((s) => s.id === setId) ??
+    item.plannedSets[index] ??
+    item.plannedSets.at(-1);
+  if (plan)
+    Object.assign(set, {
+      weight: plan.weight,
+      reps: plan.reps,
+      seconds: plan.seconds,
+      distance: plan.distance,
+      rest: plan.rest,
+      warmup: plan.warmup,
+      note: plan.note,
+    });
+  if (["time", "cardio"].includes(item.exercise.measure) && set.seconds <= 0)
+    return;
+  if (!markSet(session, itemId, setId, true, now)) return;
+  session.currentItemId = item.id;
+  session.currentSetId = item.sets.find((s) => !s.done)?.id;
+  return set;
 }

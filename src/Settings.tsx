@@ -14,8 +14,10 @@ import { Modal } from "./ui";
 import { importBackup, localDate } from "./model";
 import { csv, download } from "./storage";
 import { migrate } from "./catalog";
+import { useAppUpdates } from "./AppUpdates";
 export function Settings({ onClose }: { onClose: () => void }) {
   const { state, change, replace, toast } = useStore();
+  const updates = useAppUpdates();
   const [mode, setMode] = useState<"merge" | "replace">("merge");
   const [error, setError] = useState("");
   const [pending, setPending] = useState<unknown>();
@@ -244,6 +246,32 @@ export function Settings({ onClose }: { onClose: () => void }) {
         )}
       </section>
       <section className="settings-section">
+        <h3>Обновление приложения</h3>
+        <p>Версия {updates.version}</p>
+        <button
+          className="text-button text-link"
+          disabled={updates.checking || updates.applying}
+          onClick={() => void updates.check()}
+        >
+          {updates.checking ? "Проверяем…" : "Проверить обновления"}
+        </button>
+        {updates.available && (
+          <button
+            className="button primary full"
+            disabled={updates.applying || updates.checking}
+            onClick={() => void updates.apply()}
+          >
+            {updates.applying ? "Сохраняем…" : "Обновить приложение"}
+          </button>
+        )}
+        {updates.message && <p role="status">{updates.message}</p>}
+        {updates.error && (
+          <p className="error" role="alert">
+            {updates.error}
+          </p>
+        )}
+      </section>
+      <section className="settings-section">
         <h3>
           <Smartphone size={18} />
           Установить на iPhone
@@ -254,8 +282,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
           основные функции и локальные схемы работают офлайн.
         </p>
         <p className="muted">
-          Обновление приложения активируется при следующем закрытии и открытии
-          всех его окон. Активное занятие сохраняется на устройстве.
+          При появлении новой версии нажмите «Обновить». Занятие и таймеры
+          сохраняются перед перезагрузкой. Данные браузера очищать не нужно.
         </p>
       </section>
     </Modal>

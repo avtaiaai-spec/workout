@@ -13,6 +13,7 @@ type Store = {
   state: State;
   change: (fn: (s: State) => void) => void;
   replace: (s: State) => void;
+  flush: () => Promise<void>;
   error: string;
   saving: boolean;
   toast: (text: string) => void;
@@ -61,6 +62,11 @@ export function Provider({ children }: { children: ReactNode }) {
         );
       });
   }
+  async function flush() {
+    await queue.current;
+    if (current.current) await writeState(current.current);
+    setError("");
+  }
   function change(fn: (s: State) => void) {
     if (!current.current) return;
     const next = structuredClone(current.current);
@@ -80,7 +86,9 @@ export function Provider({ children }: { children: ReactNode }) {
       </div>
     );
   return (
-    <Context.Provider value={{ state, change, replace, error, saving, toast }}>
+    <Context.Provider
+      value={{ state, change, replace, flush, error, saving, toast }}
+    >
       {children}
       {notice && (
         <div role="status" className="toast">

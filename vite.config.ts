@@ -1,13 +1,18 @@
 import { defineConfig } from "vite";
+const buildId =
+  process.env.WORKOUT_BUILD_ID ||
+  process.env.GITHUB_SHA?.slice(0, 7) ||
+  "local";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 export default defineConfig({
   base: process.env.VITE_BASE_PATH || "./",
+  define: { __APP_VERSION__: JSON.stringify(buildId) },
   plugins: [
     react(),
     VitePWA({
       registerType: "prompt",
-      injectRegister: "auto",
+      injectRegister: false,
       includeAssets: ["icon.svg", "icon-192.png", "icon-512.png"],
       manifest: {
         name: "Мои тренировки",
@@ -38,7 +43,8 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,svg,png,webp,woff2,txt}"],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        skipWaiting: false,
+        // Activate the fresh cache immediately; AppUpdates never reloads without saving.
+        skipWaiting: true,
       },
     }),
   ],

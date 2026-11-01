@@ -1,279 +1,168 @@
 import { useEffect, useRef, useState } from "react";
-import { Timer, X, Minus, Plus, Play, Check } from "lucide-react";
+import { Timer, Plus, X, Play } from "lucide-react";
 import { useStore } from "./store";
-import { clock } from "./model";
-import { Modal } from "./ui";
-export function Timers({
-  open,
-  onOpen,
-  onClose,
-}: {
-  open: boolean;
-  onOpen: () => void;
-  onClose: () => void;
-}) {
-  const { state, change } = useStore();
-  useEffect(() => {
-    window.addEventListener("workout:open-rest", onOpen);
-    return () => window.removeEventListener("workout:open-rest", onOpen);
-  }, [onOpen]);
+import { clock, Item } from "./model";
+import { NumberInput } from "./ui";
+
+/** Notifications are headless: there is no global timer panel or toolbar button. */
+export function TimerSignals() {
+  const { state } = useStore();
   const [now, setNow] = useState(Date.now());
-  const [custom, setCustom] = useState("90");
   const alerted = useRef(new Set<number>());
   const audio = useRef<AudioContext | null>(null);
   useEffect(() => {
     const arm = () => {
-      if (!audio.current)
-        try {
-          audio.current = new AudioContext();
-        } catch {}
-      void audio.current?.resume();
+      try {
+        audio.current ??= new AudioContext();
+        void audio.current.resume();
+      } catch {}
     };
     document.addEventListener("pointerdown", arm, { once: true });
-    return () => document.removeEventListener("pointerdown", arm);
+    const interval = setInterval(() => setNow(Date.now()), 300);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("pointerdown", arm);
+    };
   }, []);
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 300);
-    return () => clearInterval(id);
+    const active = state.sessions.find((s) => s.status === "active");
+    const deadlines = [
+      state.restEnd,
+      state.effort?.end,
+      ...(active?.items.map((i) => i.restEnd) ?? []),
+    ];
+    for (const end of deadlines) {
+      if (!end || end > now || alerted.current.has(end)) continue;
+      alerted.current.add(end);
+      if (!state.settings.sound) continue;
+      try {
+        navigator.vibrate?.([150, 60, 150]);
+        const ctx = audio.current;
+        if (ctx?.state === "running") {
+          const oscillator = ctx.createOscillator(),
+            gain = ctx.createGain();
+          oscillator.connect(gain);
+          gain.connect(ctx.destination);
+          gain.gain.setValueAtTime(0.12, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+          oscillator.frequency.value = 660;
+          oscillator.start();
+          oscillator.stop(ctx.currentTime + 0.5);
+        }
+      } catch {}
+    }
+  }, [
+    now,
+    state.restEnd,
+    state.effort?.end,
+    state.sessions,
+    state.settings.sound,
+  ]);
+  return null;
+}
+export function ExerciseRestTimer({
+  sessionId,
+  item,
+}: {
+  sessionId: string;
+  item: Item;
+}) {
+  const { state, change } = useStore();
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 300);
+    return () => clearInterval(timer);
   }, []);
-  useEffect(() => {
-    for (const end of [state.restEnd, state.effort?.end]) {
-      if (end && end <= now && !alerted.current.has(end)) {
-        alerted.current.add(end);
-        if (state.settings.sound)
-          try {
-            navigator.vibrate?.([150, 60, 150]);
-            const ctx = audio.current;
-            if (ctx && ctx.state === "running") {
-              const oscillator = ctx.createOscillator();
-              const gain = ctx.createGain();
-              oscillator.connect(gain);
-              gain.connect(ctx.destination);
-              gain.gain.setValueAtTime(0.12, ctx.currentTime);
-              gain.gain.exponentialRampToValueAtTime(
-                0.001,
-                ctx.currentTime + 0.5,
-              );
-              oscillator.frequency.value = 660;
-              oscillator.start();
-              oscillator.stop(ctx.currentTime + 0.5);
-            }
-          } catch {}
-      }
-    }
-  }, [now, state.restEnd, state.effort?.end, state.settings.sound]);
-  const dock = useRef<HTMLDivElement>(null);
-  const runningRest = state.restEnd !== null && state.restEnd > now;
-  const visible = Boolean(runningRest || state.effort);
-  useEffect(() => {
-    if (!dock.current) {
-      document.documentElement.style.setProperty("--timer-height", "0px");
-      return;
-    }
-    const observer = new ResizeObserver((entries) =>
-      document.documentElement.style.setProperty(
-        "--timer-height",
-        `${entries[0].borderBoxSize?.[0]?.blockSize ?? dock.current?.getBoundingClientRect().height ?? 0}px`,
-      ),
-    );
-    observer.observe(dock.current);
-    return () => observer.disconnect();
-  }, [visible]);
+  const end =
+    item.restEnd ?? (state.restItemId === item.id ? state.restEnd : null);
+  const running = !!end && end > now;
+  const rest =
+    item.sets.find((s) => !s.done)?.rest ??
+    item.plannedSets?.[0]?.rest ??
+    item.sets[0]?.rest ??
+    state.settings.defaultRest;
+  function deadline(value: number | null) {
+    change((s) => {
+      const i = s.sessions
+        .find((x) => x.id === sessionId)
+        ?.items.find((i) => i.id === item.id);
+      if (i) i.restEnd = value;
+      s.restEnd = value;
+      s.restItemId = value ? item.id : undefined;
+    });
+  }
   return (
-    <>
-      {visible && (
-        <div
-          ref={dock}
-          className={`timer-dock ${state.restEnd || state.effort ? "running" : ""}`}
-          aria-label="Панель таймеров"
-        >
-          {runningRest && (
-            <div className="timer-topline">
-              <button
-                className="timer-toggle"
-                onClick={onOpen}
-                aria-haspopup="dialog"
-              >
-                <Timer size={21} />
-                <span>
-                  {state.restEnd ? (
-                    now >= state.restEnd ? (
-                      "Отдых завершён"
-                    ) : (
-                      <>
-                        Отдых · <b>{clock(state.restEnd - now)}</b>
-                      </>
-                    )
-                  ) : (
-                    "Таймер отдыха"
-                  )}
-                </span>
-              </button>
-              {state.restEnd && (
-                <div className="timer-quick-actions">
-                  <button
-                    className="button secondary"
-                    aria-label="Увеличить отдых на 15 секунд"
-                    onClick={() =>
-                      change((s) => {
-                        s.restEnd =
-                          Math.max(Date.now(), s.restEnd ?? 0) + 15000;
-                      })
-                    }
-                  >
-                    <Plus size={17} />
-                    15 с
-                  </button>
-                  <button
-                    className="text-button"
-                    aria-label="Пропустить отдых"
-                    onClick={() =>
-                      change((s) => {
-                        s.restEnd = null;
-                      })
-                    }
-                  >
-                    Пропустить <X size={17} />
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-          {state.effort && (
-            <div className="effort-timer">
-              <span>
-                <Timer size={18} />
-                Подход ·{" "}
-                <b>
-                  {now >= state.effort.end
-                    ? "Время вышло"
-                    : clock(state.effort.end - now)}
-                </b>
-              </span>
-              <button
-                className="icon-button"
-                aria-label="Остановить таймер подхода"
-                onClick={() =>
-                  change((s) => {
-                    s.effort = null;
-                  })
-                }
-              >
-                <X size={18} />
-              </button>
-              {now >= state.effort.end && (
-                <small>Отметьте подход в тренировке.</small>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-      {open && (
-        <Modal title="Таймер отдыха" onClose={onClose}>
-          <div className="timer-controls">
-            {state.restEnd && (
-              <div className="rest-adjust">
-                <button
-                  className="button secondary"
-                  aria-label="Уменьшить отдых на 15 секунд"
-                  onClick={() =>
-                    change((s) => {
-                      s.restEnd = Math.max(
-                        Date.now(),
-                        (s.restEnd ?? Date.now()) - 15000,
-                      );
-                    })
-                  }
-                >
-                  <Minus size={18} />
-                  15 с
-                </button>
-                <b>{clock(state.restEnd - now)}</b>
-                <button
-                  className="button secondary"
-                  onClick={() =>
-                    change((s) => {
-                      s.restEnd = Math.max(Date.now(), s.restEnd ?? 0) + 15000;
-                    })
-                  }
-                >
-                  <Plus size={18} />
-                  15 с
-                </button>
-              </div>
-            )}
-            <div className="rest-presets">
-              {[30, 60, 90, 120, 180].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => {
-                    change((s) => {
-                      s.restEnd = Date.now() + n * 1000;
-                    });
-                    onClose();
-                  }}
-                >
-                  {n} с
-                </button>
-              ))}
-            </div>
-            <label>
-              Свой отдых, секунд
-              <div className="custom-rest">
-                <input
-                  aria-label="Произвольный отдых, секунд"
-                  inputMode="numeric"
-                  value={custom}
-                  onChange={(e) => setCustom(e.target.value)}
-                />
-                <button
-                  className="button primary"
-                  disabled={
-                    !/^\d+$/.test(custom) ||
-                    Number(custom) < 1 ||
-                    Number(custom) > 3600
-                  }
-                  onClick={() => {
-                    change((s) => {
-                      s.restEnd = Date.now() + Number(custom) * 1000;
-                    });
-                    onClose();
-                  }}
-                >
-                  <Play size={18} />
-                  Старт
-                </button>
-              </div>
-            </label>
-            {state.restEnd && (
-              <button
-                className="button secondary full"
-                onClick={() => {
-                  change((s) => {
-                    s.restEnd = null;
-                  });
-                  onClose();
-                }}
-              >
-                Остановить отдых
-              </button>
-            )}
-            <label className="check-label">
-              <input
-                type="checkbox"
-                checked={state.settings.autoRest}
-                onChange={(e) =>
-                  change((s) => {
-                    s.settings.autoRest = e.target.checked;
-                  })
-                }
-              />
-              Автозапуск отдыха
-            </label>
-            <p className="muted">Таймер подхода и отдых работают независимо.</p>
-          </div>
-        </Modal>
-      )}
-    </>
+    <section
+      className={`exercise-rest ${running ? "running" : ""}`}
+      aria-label="Отдых между подходами"
+    >
+      <div className="exercise-rest-heading">
+        <Timer size={18} />
+        <span>
+          <strong>
+            {running ? `Отдых · ${clock(end! - now)}` : "Отдых между подходами"}
+          </strong>
+          <small>
+            {running
+              ? "Можно записать следующий подход в любое время"
+              : `${rest} с · ${state.settings.autoRest ? "запускается после подхода" : "автозапуск выключен"}`}
+          </small>
+        </span>
+      </div>
+      <div className="exercise-rest-actions">
+        {running ? (
+          <>
+            <button
+              className="button secondary"
+              aria-label="Увеличить отдых на 15 секунд"
+              onClick={() => deadline(Math.max(Date.now(), end!) + 15000)}
+            >
+              <Plus size={16} />
+              15 с
+            </button>
+            <button
+              className="text-button"
+              aria-label="Пропустить отдых"
+              onClick={() => deadline(null)}
+            >
+              Пропустить
+              <X size={16} />
+            </button>
+          </>
+        ) : (
+          <button
+            className="text-button"
+            disabled={!rest}
+            onClick={() => deadline(Date.now() + rest * 1000)}
+          >
+            <Play size={15} />
+            Начать отдых
+          </button>
+        )}
+      </div>
+      <details>
+        <summary>Изменить отдых</summary>
+        <label>
+          Отдых между подходами, с
+          <NumberInput
+            integer
+            max={3600}
+            label="Отдых между подходами, секунд"
+            value={rest}
+            onChange={(value) =>
+              change((s) => {
+                const i = s.sessions
+                  .find((x) => x.id === sessionId)
+                  ?.items.find((x) => x.id === item.id);
+                if (!i) return;
+                for (const set of i.sets) if (!set.done) set.rest = value;
+                if (i.plannedSets)
+                  for (const set of i.plannedSets) set.rest = value;
+              })
+            }
+          />
+        </label>
+      </details>
+    </section>
   );
 }

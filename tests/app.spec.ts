@@ -83,9 +83,12 @@ test("замеры: создать, сравнить, изменить, удал
     page.getByRole("heading", { name: "Замеры тела", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".measurement-record")).toHaveCount(0);
+  await expect(
+    page.locator(".measurement-stats .stat-card > small:first-of-type"),
+  ).toHaveText(["Вес", "Грудь", "Талия", "Бёдра"]);
   for (const row of [
-    { date: "2026-09-01", weight: "70,4", waist: "80,5" },
-    { date: "2026-10-01", weight: "69.2", waist: "78,1" },
+    { date: "2026-09-01", weight: "70,4", waist: "80,5", chest: "96,3" },
+    { date: "2026-10-01", weight: "69.2", waist: "78,1", chest: "95,6" },
   ]) {
     await page
       .getByRole("button", { name: "Добавить замер", exact: true })
@@ -93,6 +96,7 @@ test("замеры: создать, сравнить, изменить, удал
     await page.getByLabel("Дата замера", { exact: true }).fill(row.date);
     await page.getByLabel("Вес, кг", { exact: true }).fill(row.weight);
     await page.getByLabel("Талия, см", { exact: true }).fill(row.waist);
+    await page.getByLabel("Грудь, см", { exact: true }).fill(row.chest);
     await page
       .getByRole("button", { name: "Сохранить замер", exact: true })
       .click();
