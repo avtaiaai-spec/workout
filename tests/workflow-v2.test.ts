@@ -23,7 +23,7 @@ import { readState, writeState } from "../src/storage";
 describe("Новый понятный сценарий и миграция", () => {
   it("первый вход: 17 упражнений, ни одной автоматически созданной тренировки или истории", () => {
     const s = initialState();
-    expect(s.version).toBe(2);
+    expect(s.version).toBe(3);
     expect(s.exercises).toHaveLength(17);
     expect(s.templates).toEqual([]);
     expect(s.sessions).toEqual([]);

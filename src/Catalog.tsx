@@ -35,6 +35,14 @@ export function Catalog({
   const [category, setCategory] = useState("Все");
   const [equipment, setEquipment] = useState("Все");
   const [favorites, setFavorites] = useState(false);
+  const [recentOnly, setRecentOnly] = useState(false);
+  const recentIds = [
+    ...new Set(
+      [...state.sessions]
+        .sort((a, b) => b.startedAt - a.startedAt)
+        .flatMap((s) => s.items.map((i) => i.exercise.id)),
+    ),
+  ].slice(0, 12);
   const [selected, setSelected] = useState<string[]>([]);
   const visible = state.exercises.filter(
     (e) =>
@@ -43,6 +51,7 @@ export function Catalog({
         e.secondary.includes(category)) &&
       (equipment === "Все" || e.equipment === equipment) &&
       (!favorites || state.favorites.includes(e.id)) &&
+      (!recentOnly || recentIds.includes(e.id)) &&
       `${e.name} ${e.aliases}`
         .toLowerCase()
         .replaceAll("ё", "е")
@@ -52,12 +61,10 @@ export function Catalog({
     <>
       <div className="section-heading">
         <div>
-          <span className="eyebrow">ДВИЖЕНИЕ НАЧИНАЕТСЯ ЗДЕСЬ</span>
           <h1>
-            Упражнения
+            Каталог
             <span className="title-count">{state.exercises.length}</span>
           </h1>
-          <p>Найдите своё движение. Освойте технику.</p>
         </div>
         <button className="button secondary" onClick={onCustom}>
           <Plus size={18} />
@@ -65,18 +72,12 @@ export function Catalog({
         </button>
       </div>
       <div className="catalog-categories">
-        {[
-          "Все",
-          ...categories.filter((c) =>
-            state.exercises.some((e) => e.category === c),
-          ),
-        ].map((c, i) => (
+        {["Все", ...categories].map((c, i) => (
           <button
             key={c}
             className={`category-card cat-${i % 4} ${category === c ? "selected" : ""}`}
             onClick={() => setCategory(c)}
           >
-            <span>{["◈", "↗", "⌁", "◇"][i % 4]}</span>
             <b>{c}</b>
             <small>
               {c === "Все"
@@ -116,6 +117,13 @@ export function Catalog({
           Избранное
         </button>
       </div>
+      <button
+        className={`text-button ${recentOnly ? "active-text" : ""}`}
+        aria-pressed={recentOnly}
+        onClick={() => setRecentOnly(!recentOnly)}
+      >
+        Недавние
+      </button>
       <div className="section-label">
         {category} <span>{visible.length}</span>
       </div>

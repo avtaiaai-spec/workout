@@ -13,9 +13,7 @@ const days = [
 ];
 export function WeeklyPlanner({ onCreate }: { onCreate: () => void }) {
   const { state, change, toast } = useStore();
-  const [open, setOpen] = useState(
-    !state.rules.some((r) => !r.once && (!r.end || r.end >= localDate())),
-  );
+  const [open, setOpen] = useState(false);
   const templates = state.templates.filter((t) => !t.archived);
   const initial = () => {
     const values: Record<number, string[]> = {};
@@ -45,18 +43,18 @@ export function WeeklyPlanner({ onCreate }: { onCreate: () => void }) {
     <section className="panel weekly-planner">
       <div className="section-heading small">
         <div>
-          <span className="eyebrow">ВАШ НЕДЕЛЬНЫЙ РИТМ</span>
-          <h2>В какие дни тренируемся?</h2>
+          <h2>Расписание</h2>
         </div>
         <button
           className="text-button text-link"
+          aria-label={open ? "Свернуть расписание" : "Настроить расписание"}
           aria-expanded={open}
           onClick={() => {
             if (!open && !dirty) setAssignments(initial());
             setOpen(!open);
           }}
         >
-          {open ? "Свернуть" : "Изменить"}
+          {open ? "Свернуть" : "Настроить"}
         </button>
       </div>
       {!open ? (

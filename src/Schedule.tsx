@@ -201,7 +201,10 @@ export function Calendar({
   const occ = occurrences(state, days[0], days.at(-1)!);
   const forDate = occurrences(state, date, date);
   const free = state.sessions.filter(
-    (s) => s.date === date && !s.occurrenceId && s.status !== "cancelled",
+    (s) =>
+      s.date === date &&
+      !forDate.some((o) => o.session?.id === s.id) &&
+      s.status !== "cancelled",
   );
   function navigate(n: number) {
     const d = asDate(anchor);
@@ -213,11 +216,13 @@ export function Calendar({
   }
   return (
     <>
+      <a className="back-button" href={`#plan/${date}`}>
+        <ChevronLeft size={18} />К плану
+      </a>
       <div className="section-heading">
         <div>
-          <span className="eyebrow">ПЛАНЫ, КОТОРЫЕ ПОДХОДЯТ ВАМ</span>
-          <h1>Календарь</h1>
-          <p>Ваше расписание в вашем ритме.</p>
+          <h1>Планирование</h1>
+          <p>Назначение и перенос занятий.</p>
         </div>
         <button className="button primary" onClick={() => onPlan(date)}>
           <Plus size={18} />
@@ -282,7 +287,9 @@ export function Calendar({
             const dayOcc = occ.filter((o) => o.date === day);
             const sessions = state.sessions.filter(
               (s) =>
-                s.date === day && !s.occurrenceId && s.status !== "cancelled",
+                s.date === day &&
+                !occ.some((o) => o.date === day && o.session?.id === s.id) &&
+                s.status !== "cancelled",
             );
             return (
               <button
@@ -520,4 +527,53 @@ export function Calendar({
 }
 function DumbbellIcon() {
   return <CalendarDays size={21} />;
+}
+
+export function MoveOccurrence({
+  occurrence,
+  onClose,
+  onMoved,
+}: {
+  occurrence: Occurrence;
+  onClose: () => void;
+  onMoved?: (date: string) => void;
+}) {
+  const { change } = useStore();
+  const [date, setDate] = useState(
+    occurrence.date < localDate() ? localDate() : occurrence.date,
+  );
+  return (
+    <Modal title="Перенести одно занятие" onClose={onClose}>
+      <p>Остальные даты повторяющейся серии не изменятся.</p>
+      <label>
+        Новая дата
+        <input
+          type="date"
+          min={localDate()}
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+        />
+      </label>
+      <button
+        className="button primary full"
+        disabled={!date || date < localDate()}
+        onClick={() => {
+          change((s) => {
+            s.exceptions = s.exceptions.filter((e) => e.id !== occurrence.id);
+            s.exceptions.push({
+              id: occurrence.id,
+              ruleId: occurrence.ruleId,
+              originalDate: occurrence.originalDate,
+              date,
+              cancelled: false,
+            });
+          });
+          onMoved?.(date);
+          onClose();
+        }}
+      >
+        Перенести
+      </button>
+    </Modal>
+  );
 }

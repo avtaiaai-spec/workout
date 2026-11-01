@@ -35,7 +35,11 @@ export function useViewport() {
             ? (document.querySelector(".bottom-nav")?.getBoundingClientRect()
                 .height ?? 0)
             : 0;
-        const top = offset + timerHeight + 16;
+        const workBar = modal
+          ? 0
+          : (document.querySelector(".session-topbar")?.getBoundingClientRect()
+              .height ?? 0);
+        const top = offset + timerHeight + workBar + 16;
         const bottom = offset + height - navigation - 16;
         if (rect.top >= top && rect.bottom <= bottom) return;
         const shift =

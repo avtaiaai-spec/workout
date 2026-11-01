@@ -66,6 +66,7 @@ export function csv(state: State) {
       "Дистанция, км",
       "Разминка",
       "Комментарий",
+      "Время записи",
     ],
   ];
   for (const s of state.sessions.filter((s) => s.status === "completed"))
@@ -85,6 +86,7 @@ export function csv(state: State) {
             String(set.distance),
             set.warmup ? "Да" : "Нет",
             set.note,
+            set.recordedAt ? new Date(set.recordedAt).toISOString() : "",
           ]);
       });
   return rows.map((r) => r.map(q).join(";")).join("\r\n");

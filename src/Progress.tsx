@@ -39,40 +39,30 @@ export function Chart({
     <>
       <div className="chart">
         <svg viewBox="0 0 600 196" role="img" aria-label={`График: ${unit}`}>
-          <defs>
-            <linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--accent)" stopOpacity=".18" />
-              <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-            </linearGradient>
-          </defs>
           {[35, 75, 115, 155].map((y) => (
             <path
               key={y}
               d={`M30 ${y}H570`}
               stroke="var(--border)"
-              strokeDasharray="4 5"
+              strokeWidth="1"
             />
           ))}
           {points.length > 0 && (
             <>
-              <path
-                d={`M${x(0)} 155 ${points.map((p, i) => `L${x(i)} ${y(p.value)}`).join(" ")} L${x(points.length - 1)} 155Z`}
-                fill="url(#chart-fill)"
-              />
               <path
                 d={points
                   .map((p, i) => `${i ? "L" : "M"}${x(i)} ${y(p.value)}`)
                   .join(" ")}
                 fill="none"
                 stroke="var(--accent)"
-                strokeWidth="3"
+                strokeWidth="2"
               />
               {points.map((p, i) => (
                 <g key={p.date + i}>
                   <circle
                     cx={x(i)}
                     cy={y(p.value)}
-                    r="17"
+                    r="38"
                     fill="transparent"
                     role="button"
                     tabIndex={0}
@@ -128,9 +118,15 @@ export function Chart({
     </>
   );
 }
-export function ExerciseProgress({ exercise }: { exercise: Exercise }) {
+export function ExerciseProgress({
+  exercise,
+  sessions: source,
+}: {
+  exercise: Exercise;
+  sessions?: Session[];
+}) {
   const { state } = useStore();
-  const all = completedSets(state.sessions).filter(
+  const all = completedSets(source ?? state.sessions).filter(
     (r) => r.item.exercise.id === exercise.id && !r.set.warmup,
   );
   const accounts = [...new Set(all.map((r) => r.item.accounting))];
@@ -168,9 +164,11 @@ export function ExerciseProgress({ exercise }: { exercise: Exercise }) {
                   )
                 : time
                   ? Math.max(...rr.map((r) => r.set.seconds))
-                  : account === "assistance"
-                    ? Math.min(...rr.map((r) => r.set.weight))
-                    : Math.max(...rr.map((r) => r.set.weight)),
+                  : exercise.measure === "reps"
+                    ? Math.max(...rr.map((r) => r.set.reps))
+                    : account === "assistance"
+                      ? Math.min(...rr.map((r) => r.set.weight))
+                      : Math.max(...rr.map((r) => r.set.weight)),
     };
   });
   const unit =
@@ -184,14 +182,35 @@ export function ExerciseProgress({ exercise }: { exercise: Exercise }) {
             ? "повторения"
             : time
               ? "секунды"
-              : account === "assistance"
-                ? "кг помощи (меньше — лучше)"
-                : "кг";
+              : exercise.measure === "reps"
+                ? "повторения"
+                : account === "assistance"
+                  ? "кг помощи"
+                  : "кг";
+  const lastSession = [...sessions].sort(
+    (a, b) => b.startedAt - a.startedAt,
+  )[0];
+  const latestRows = rows.filter((r) => r.session.id === lastSession?.id);
+  const referenceWeight =
+    weight.trim() && Number.isFinite(Number(weight.replace(",", ".")))
+      ? Number(weight.replace(",", "."))
+      : (latestRows[0]?.set.weight ?? 0);
+  const bestReps = Math.max(
+    0,
+    ...rows
+      .filter((r) => r.set.weight === referenceWeight)
+      .map((r) => r.set.reps),
+  );
   return !rows.length ? (
     <Empty title="Первый результат — впереди" icon={<Activity />}>
       <p>
-        Завершите занятие и отметьте подходы. Разминка не включается в рекорды.
+        Завершите занятие и отметьте рабочие подходы. Разминка не включается в
+        рекорды.
       </p>
+      <ExerciseHistory
+        exercise={exercise}
+        sessions={source ?? state.sessions}
+      />
     </Empty>
   ) : (
     <>
@@ -200,7 +219,10 @@ export function ExerciseProgress({ exercise }: { exercise: Exercise }) {
           Способ учёта
           <select
             value={account}
-            onChange={(e) => setAccount(e.target.value as Accounting)}
+            onChange={(e) => {
+              setAccount(e.target.value as Accounting);
+              setMetric("max");
+            }}
           >
             {accounts.map((a) => (
               <option key={a} value={a}>
@@ -217,13 +239,18 @@ export function ExerciseProgress({ exercise }: { exercise: Exercise }) {
                 ? "Максимальная длительность"
                 : account === "assistance"
                   ? "Минимальная помощь"
-                  : "Максимальный рабочий вес"}
+                  : exercise.measure === "reps"
+                    ? "Максимум повторений"
+                    : "Рабочий вес по датам"}
             </option>
             <option value="sets">Количество подходов</option>
-            {!time && <option value="reps">Повторения при весе</option>}
             {exercise.measure === "weight" && (
-              <option value="volume">Внешний объём</option>
+              <option value="reps">Повторения при выбранном весе</option>
             )}
+            {exercise.measure === "weight" &&
+              !["unknown", "body", "assistance"].includes(account) && (
+                <option value="volume">Внешний объём</option>
+              )}
             {exercise.measure === "cardio" && (
               <option value="distance">Дистанция</option>
             )}
@@ -241,13 +268,51 @@ export function ExerciseProgress({ exercise }: { exercise: Exercise }) {
           />
         </label>
       )}
+      <p className="latest-result muted">
+        Последнее занятие · {lastSession?.date}:{" "}
+        {latestRows
+          .slice(0, 8)
+          .map((r) =>
+            time
+              ? `${r.set.seconds} с${exercise.measure === "cardio" ? ` / ${num(r.set.distance)} км` : ""}`
+              : exercise.measure === "reps"
+                ? `${r.set.reps} повторений`
+                : `${num(r.set.weight)} кг × ${r.set.reps}`,
+          )
+          .join("; ")}
+        {latestRows.length > 8 ? "; все подходы в истории ниже" : ""}.
+      </p>
+      <section className="records-summary">
+        <h3>Личные рекорды</h3>
+        {time ? (
+          <p>
+            {Math.max(...rows.map((r) => r.set.seconds))} с
+            {exercise.measure === "cardio"
+              ? ` · ${num(Math.max(...rows.map((r) => r.set.distance)))} км`
+              : ""}
+          </p>
+        ) : exercise.measure === "reps" ? (
+          <p>{Math.max(...rows.map((r) => r.set.reps))} повторений</p>
+        ) : ["unknown", "assistance"].includes(account) ? (
+          <p className="muted">
+            {account === "unknown"
+              ? "Уточните способ учёта веса для сопоставимых рекордов."
+              : "Вес помощи показан отдельно и не считается поднятым весом."}
+          </p>
+        ) : (
+          <p>
+            Рабочий вес: {num(Math.max(...rows.map((r) => r.set.weight)))} кг{" "}
+            <span>·</span> Повторы при {num(referenceWeight)} кг: {bestReps}
+          </p>
+        )}
+      </section>
       <Chart points={points} unit={unit} />
       <div className="notice">
         <Trophy size={18} />
         <p>
           {account === "assistance"
             ? "Помощь не считается поднятым весом. Сравнивайте её при сопоставимых повторениях."
-            : `Лучший результат: ${num(Math.max(...points.map((p) => p.value)))} ${unit}.`}
+            : `Максимум по выбранному показателю: ${num(Math.max(...points.map((p) => p.value)))} ${unit}.`}
           {points.length > 1 &&
             ` Предыдущее занятие: ${num(points.at(-2)!.value)} ${unit}; изменение ${num(points.at(-1)!.value - points.at(-2)!.value)} ${unit}.`}
         </p>
@@ -258,10 +323,88 @@ export function ExerciseProgress({ exercise }: { exercise: Exercise }) {
         </p>
       )}
       <small>
-        Разные способы учёта отображаются отдельно. Разминочные подходы
-        исключены.
+        Рабочий вес и число повторений — разные показатели. Разные способы учёта
+        показаны отдельно; разминка не включена в график и рекорды.
       </small>
+      <ExerciseHistory
+        exercise={exercise}
+        sessions={source ?? state.sessions}
+        account={account}
+      />
     </>
+  );
+}
+export function ExerciseHistory({
+  exercise,
+  sessions,
+  account,
+}: {
+  exercise: Exercise;
+  sessions: Session[];
+  account?: Accounting;
+}) {
+  const rows = completedSets(sessions)
+    .filter(
+      (r) =>
+        r.item.exercise.id === exercise.id &&
+        (!account || r.item.accounting === account),
+    )
+    .sort((a, b) => b.session.startedAt - a.session.startedAt);
+  return (
+    <section className="exercise-full-history">
+      <h3>Полная история подходов</h3>
+      {!rows.length ? (
+        <p className="muted">Пока нет выполненных подходов.</p>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th>Подход</th>
+                <th>Результат</th>
+                <th>Учёт / заметка</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.session.id + r.item.id + r.set.id}>
+                  <td>
+                    {r.session.date}
+                    <small>
+                      {r.set.recordedAt
+                        ? new Date(r.set.recordedAt).toLocaleTimeString(
+                            "ru-RU",
+                            { hour: "2-digit", minute: "2-digit" },
+                          )
+                        : "Время записи не сохранено"}
+                    </small>
+                  </td>
+                  <td>
+                    {r.item.sets.indexOf(r.set) + 1}
+                    {r.set.side && ` · ${r.set.side}`}
+                    {r.set.warmup && " · разминка"}
+                  </td>
+                  <td>
+                    {exercise.measure === "time"
+                      ? `${r.set.seconds} с`
+                      : exercise.measure === "cardio"
+                        ? `${r.set.seconds} с / ${num(r.set.distance)} км`
+                        : exercise.measure === "reps"
+                          ? `${r.set.reps} повторений`
+                          : `${num(r.set.weight)} кг × ${r.set.reps}`}
+                  </td>
+                  <td>
+                    {accountingLabels[r.item.accounting]}
+                    {r.set.note && <small>{r.set.note}</small>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 export function Progress({
@@ -272,39 +415,41 @@ export function Progress({
   onExercise: (e: Exercise) => void;
 }) {
   const { state } = useStore();
-  const [period, setPeriod] = useState("month");
+  const [period, setPeriod] = useState("all");
   const [from, setFrom] = useState(shiftDate(localDate(), -30));
   const [to, setTo] = useState(localDate());
+  const allExercises = [
+    ...new Map(
+      [
+        ...state.exercises,
+        ...completedSets(state.sessions).map((r) => r.item.exercise),
+      ].map((e) => [e.id, e]),
+    ).values(),
+  ];
+  const recent = completedSets(state.sessions).sort(
+    (a, b) => b.session.startedAt - a.session.startedAt,
+  )[0]?.item.exercise.id;
+  const [exerciseId, setExerciseId] = useState(
+    recent ?? allExercises[0]?.id ?? "",
+  );
+  const exercise =
+    allExercises.find((e) => e.id === exerciseId) ?? allExercises[0];
   const now = localDate();
   const start =
     period === "week"
       ? monday()
       : period === "month"
-        ? now.slice(0, 7) + "-01"
-        : period === "quarter"
-          ? `${now.slice(0, 4)}-${String(Math.floor(new Date().getMonth() / 3) * 3 + 1).padStart(2, "0")}-01`
-          : period === "year"
-            ? now.slice(0, 4) + "-01-01"
-            : from;
+        ? shiftDate(now, -30)
+        : period === "year"
+          ? now.slice(0, 4) + "-01-01"
+          : period === "custom"
+            ? from
+            : "0000-01-01";
   const end = period === "custom" ? to : now;
-  const sessions = state.sessions
-    .filter((s) => s.status === "completed" && s.date >= start && s.date <= end)
-    .sort((a, b) => b.startedAt - a.startedAt);
-  const totals = stats(sessions);
-  const rows = completedSets(sessions);
-  const groups = useMemo(
-    () =>
-      Object.entries(
-        rows.reduce<Record<string, number>>((a, r) => {
-          a[r.item.exercise.category] = (a[r.item.exercise.category] ?? 0) + 1;
-          return a;
-        }, {}),
-      ),
-    [sessions.map((s) => s.id).join(), totals.sets],
+  const sessions = state.sessions.filter(
+    (s) => s.status === "completed" && s.date >= start && s.date <= end,
   );
-  const exercises = [
-    ...new Map(rows.map((r) => [r.item.exercise.id, r.item.exercise])).values(),
-  ];
+  const totals = stats(sessions);
   const points = [...new Set(sessions.map((s) => s.date))]
     .sort()
     .map((date) => ({
@@ -312,24 +457,42 @@ export function Progress({
       value: sessions.filter((s) => s.date === date).length,
     }));
   return (
-    <>
+    <div className="progress-page">
       <div className="section-heading">
         <div>
-          <span className="eyebrow">КАЖДЫЙ ПОДХОД ИМЕЕТ ЗНАЧЕНИЕ</span>
-          <h1>Ваш прогресс</h1>
-          <p>Маленькие шаги. Настоящие изменения.</p>
+          <h1>Прогресс</h1>
+          <p>Результаты по упражнениям и регулярность.</p>
         </div>
-        <select
-          aria-label="Период статистики"
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-        >
-          <option value="week">Эта неделя</option>
-          <option value="month">Этот месяц</option>
-          <option value="quarter">Этот квартал</option>
-          <option value="year">Этот год</option>
-          <option value="custom">Свой период</option>
-        </select>
+      </div>
+      <div className="progress-filters">
+        <label>
+          Упражнение
+          <select
+            aria-label="Упражнение для прогресса"
+            value={exercise?.id ?? ""}
+            onChange={(e) => setExerciseId(e.target.value)}
+          >
+            {allExercises.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Период
+          <select
+            aria-label="Период статистики"
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+          >
+            <option value="all">За всё время</option>
+            <option value="week">Эта неделя</option>
+            <option value="month">30 дней</option>
+            <option value="year">Этот год</option>
+            <option value="custom">Свой период</option>
+          </select>
+        </label>
       </div>
       {period === "custom" && (
         <div className="form-row">
@@ -351,100 +514,65 @@ export function Progress({
           </label>
         </div>
       )}
-      <a href="#body" className="body-shortcut panel">
-        <span>
-          <strong>Вес и обхваты тела</strong>
-          <small>Открыть замеры и динамику</small>
-        </span>
-        <ArrowUpRight size={22} />
-      </a>
+      {exercise && (
+        <section className="exercise-progress-main">
+          <div className="section-heading small">
+            <h2>{exercise.name}</h2>
+            <button
+              className="text-button text-link"
+              onClick={() => onExercise(exercise)}
+            >
+              Техника и карточка
+            </button>
+          </div>
+          <ExerciseProgress
+            key={exercise.id}
+            exercise={exercise}
+            sessions={sessions}
+          />
+        </section>
+      )}
+      <h2 className="section-label">Регулярность</h2>
       <div className="stat-grid">
-        <Stat label="Тренировок" value={totals.count} icon={<Dumbbell />} />
         <Stat
-          label="Общее время"
+          label="Завершено занятий"
+          value={totals.count}
+          icon={<Dumbbell />}
+        />
+        <Stat
+          label="Время"
           value={`${Math.round(totals.time / 60000)} мин`}
           icon={<Clock3 />}
         />
-        <Stat label="Подходов" value={totals.sets} icon={<BarChart3 />} />
-        <Stat label="Повторений" value={totals.reps} icon={<Activity />} />
+        <Stat
+          label="Выполнено подходов"
+          value={totals.sets}
+          icon={<BarChart3 />}
+        />
+        <Stat
+          label="Дней с занятиями"
+          value={new Set(sessions.map((s) => s.date)).size}
+          icon={<Activity />}
+        />
       </div>
-      {!sessions.length ? (
-        <Empty title="Здесь будет ваша история" icon={<BarChart3 />}>
-          <p>
-            Начните и завершите первую тренировку.
-            <br />
-            Шаблоны и планы не влияют на статистику.
-          </p>
-        </Empty>
-      ) : (
-        <>
-          <div className="dashboard-grid">
-            <section className="panel">
-              <h3>Ритм тренировок</h3>
-              <Chart points={points} unit="тренировок" />
-            </section>
-            <section className="panel">
-              <h3>Баланс нагрузки</h3>
-              <p className="muted">
-                По основной мышечной группе, без удвоения.
-              </p>
-              {groups.map(([name, n]) => (
-                <div className="muscle-row" key={name}>
-                  <span>{name}</span>
-                  <b>{n}</b>
-                  <div>
-                    <i style={{ width: `${(n / totals.sets) * 100}%` }} />
-                  </div>
-                </div>
-              ))}
-            </section>
-          </div>
-          <div className="inline-stats">
-            Средняя длительность:{" "}
-            {Math.round(totals.time / totals.count / 60000)} мин · Учтённый
-            объём: {num(totals.volume)} кг·повт.
-          </div>
-          <h2>По упражнениям</h2>
-          <div className="exercise-links">
-            {exercises.map((e) => (
-              <button
-                className="list-row"
-                key={e.id}
-                onClick={() => onExercise(e)}
-              >
-                {e.name}
-                <ArrowUpRight size={18} />
-              </button>
-            ))}
-          </div>
-          <h2>История занятий</h2>
-          <div className="history-list">
-            {sessions.map((s) => (
-              <button
-                className="list-row"
-                key={s.id}
-                onClick={() => onSession(s.id)}
-              >
-                <span>
-                  <small>
-                    {new Date(s.date + "T12:00:00").toLocaleDateString(
-                      "ru-RU",
-                      { day: "numeric", month: "long" },
-                    )}
-                  </small>
-                  <b>{s.name}</b>
-                </span>
-                <span>
-                  {stats([s]).sets} подходов · {Math.round(elapsed(s) / 60000)}{" "}
-                  мин
-                </span>
-                <ArrowUpRight size={18} />
-              </button>
-            ))}
-          </div>
-        </>
+      {sessions.length > 0 && (
+        <section className="panel">
+          <h3>Занятия по датам</h3>
+          <Chart points={points} unit="занятий" />
+        </section>
       )}
-    </>
+      <a href="#body" className="body-shortcut">
+        <span>
+          <strong>Вес и обхваты тела</strong>
+          <small>Замеры и динамика</small>
+        </span>
+        <ArrowUpRight size={20} />
+      </a>
+      <a href="#journal" className="text-button text-link">
+        Открыть журнал занятий
+        <ArrowUpRight size={16} />
+      </a>
+    </div>
   );
 }
 export function Stat({

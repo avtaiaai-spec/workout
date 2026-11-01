@@ -3,10 +3,21 @@ import { Timer, X, Minus, Plus, Play, Check } from "lucide-react";
 import { useStore } from "./store";
 import { clock } from "./model";
 import { Modal } from "./ui";
-export function Timers() {
+export function Timers({
+  open,
+  onOpen,
+  onClose,
+}: {
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+}) {
   const { state, change } = useStore();
+  useEffect(() => {
+    window.addEventListener("workout:open-rest", onOpen);
+    return () => window.removeEventListener("workout:open-rest", onOpen);
+  }, [onOpen]);
   const [now, setNow] = useState(Date.now());
-  const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState("90");
   const alerted = useRef(new Set<number>());
   const audio = useRef<AudioContext | null>(null);
@@ -52,103 +63,113 @@ export function Timers() {
     }
   }, [now, state.restEnd, state.effort?.end, state.settings.sound]);
   const dock = useRef<HTMLDivElement>(null);
+  const runningRest = state.restEnd !== null && state.restEnd > now;
+  const visible = Boolean(runningRest || state.effort);
   useEffect(() => {
-    if (!dock.current) return;
+    if (!dock.current) {
+      document.documentElement.style.setProperty("--timer-height", "0px");
+      return;
+    }
     const observer = new ResizeObserver((entries) =>
       document.documentElement.style.setProperty(
         "--timer-height",
-        `${entries[0].contentRect.height + 20}px`,
+        `${entries[0].borderBoxSize?.[0]?.blockSize ?? dock.current?.getBoundingClientRect().height ?? 0}px`,
       ),
     );
     observer.observe(dock.current);
     return () => observer.disconnect();
-  }, []);
+  }, [visible]);
   return (
     <>
-      <div
-        ref={dock}
-        className={`timer-dock ${state.restEnd || state.effort ? "running" : ""}`}
-        aria-label="Панель таймеров"
-      >
-        <div className="timer-topline">
-          <button
-            className="timer-toggle"
-            onClick={() => setOpen(true)}
-            aria-haspopup="dialog"
-          >
-            <Timer size={21} />
-            <span>
-              {state.restEnd ? (
-                now >= state.restEnd ? (
-                  "Отдых завершён"
-                ) : (
-                  <>
-                    Отдых · <b>{clock(state.restEnd - now)}</b>
-                  </>
-                )
-              ) : (
-                "Таймер отдыха"
+      {visible && (
+        <div
+          ref={dock}
+          className={`timer-dock ${state.restEnd || state.effort ? "running" : ""}`}
+          aria-label="Панель таймеров"
+        >
+          {runningRest && (
+            <div className="timer-topline">
+              <button
+                className="timer-toggle"
+                onClick={onOpen}
+                aria-haspopup="dialog"
+              >
+                <Timer size={21} />
+                <span>
+                  {state.restEnd ? (
+                    now >= state.restEnd ? (
+                      "Отдых завершён"
+                    ) : (
+                      <>
+                        Отдых · <b>{clock(state.restEnd - now)}</b>
+                      </>
+                    )
+                  ) : (
+                    "Таймер отдыха"
+                  )}
+                </span>
+              </button>
+              {state.restEnd && (
+                <div className="timer-quick-actions">
+                  <button
+                    className="button secondary"
+                    aria-label="Увеличить отдых на 15 секунд"
+                    onClick={() =>
+                      change((s) => {
+                        s.restEnd =
+                          Math.max(Date.now(), s.restEnd ?? 0) + 15000;
+                      })
+                    }
+                  >
+                    <Plus size={17} />
+                    15 с
+                  </button>
+                  <button
+                    className="text-button"
+                    aria-label="Пропустить отдых"
+                    onClick={() =>
+                      change((s) => {
+                        s.restEnd = null;
+                      })
+                    }
+                  >
+                    Пропустить <X size={17} />
+                  </button>
+                </div>
               )}
-            </span>
-          </button>
-          {state.restEnd && (
-            <div className="timer-quick-actions">
+            </div>
+          )}
+          {state.effort && (
+            <div className="effort-timer">
+              <span>
+                <Timer size={18} />
+                Подход ·{" "}
+                <b>
+                  {now >= state.effort.end
+                    ? "Время вышло"
+                    : clock(state.effort.end - now)}
+                </b>
+              </span>
               <button
-                className="button secondary"
-                aria-label="Увеличить отдых на 15 секунд"
+                className="icon-button"
+                aria-label="Остановить таймер подхода"
                 onClick={() =>
                   change((s) => {
-                    s.restEnd = (s.restEnd ?? Date.now()) + 15000;
+                    s.effort = null;
                   })
                 }
               >
-                <Plus size={17} />
-                15 с
+                <X size={18} />
               </button>
-              <button
-                className="text-button"
-                aria-label="Пропустить отдых"
-                onClick={() =>
-                  change((s) => {
-                    s.restEnd = null;
-                  })
-                }
-              >
-                Пропустить <X size={17} />
-              </button>
+              {now >= state.effort.end && (
+                <small>Отметьте подход в тренировке.</small>
+              )}
             </div>
           )}
         </div>
-        {state.effort && (
-          <div className="effort-timer">
-            <span>
-              <Timer size={18} />
-              Подход ·{" "}
-              <b>
-                {now >= state.effort.end
-                  ? "Время вышло"
-                  : clock(state.effort.end - now)}
-              </b>
-            </span>
-            <button
-              className="icon-button"
-              aria-label="Остановить таймер подхода"
-              onClick={() =>
-                change((s) => {
-                  s.effort = null;
-                })
-              }
-            >
-              <X size={18} />
-            </button>
-            {now >= state.effort.end && (
-              <small>Отметьте подход в тренировке.</small>
-            )}
-          </div>
-        )}
-      </div>
+      )}
       {open && (
-        <Modal title="Таймер отдыха" onClose={() => setOpen(false)}>
+        <Modal title="Таймер отдыха" onClose={onClose}>
           <div className="timer-controls">
             {state.restEnd && (
               <div className="rest-adjust">
@@ -172,7 +193,7 @@ export function Timers() {
                   className="button secondary"
                   onClick={() =>
                     change((s) => {
-                      s.restEnd = (s.restEnd ?? Date.now()) + 15000;
+                      s.restEnd = Math.max(Date.now(), s.restEnd ?? 0) + 15000;
                     })
                   }
                 >
@@ -189,7 +210,7 @@ export function Timers() {
                     change((s) => {
                       s.restEnd = Date.now() + n * 1000;
                     });
-                    setOpen(false);
+                    onClose();
                   }}
                 >
                   {n} с
@@ -216,7 +237,7 @@ export function Timers() {
                     change((s) => {
                       s.restEnd = Date.now() + Number(custom) * 1000;
                     });
-                    setOpen(false);
+                    onClose();
                   }}
                 >
                   <Play size={18} />
@@ -231,7 +252,7 @@ export function Timers() {
                   change((s) => {
                     s.restEnd = null;
                   });
-                  setOpen(false);
+                  onClose();
                 }}
               >
                 Остановить отдых

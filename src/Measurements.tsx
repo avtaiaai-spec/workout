@@ -92,7 +92,6 @@ export function Measurements() {
     <>
       <div className="section-heading">
         <div>
-          <span className="eyebrow">НАБЛЮДАЙТЕ ЗА ИЗМЕНЕНИЯМИ</span>
           <h1>Замеры тела</h1>
           <p>Вес и обхваты в одном месте. Без обязательных целей и оценок.</p>
         </div>

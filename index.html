@@ -2,6 +2,22 @@
 <html lang="ru" data-theme="system">
   <head>
     <meta charset="UTF-8" />
+    <style>
+      html {
+        background: #fafaf8;
+        color: #181818;
+      }
+      html[data-theme="dark"] {
+        background: #121212;
+        color: #f5f5f2;
+      }
+      @media (prefers-color-scheme: dark) {
+        html[data-theme="system"] {
+          background: #121212;
+          color: #f5f5f2;
+        }
+      }
+    </style>
     <script>
       // Apply a saved appearance before styles or the React bundle can paint.
       try {
@@ -21,12 +37,12 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#087F83" />
+    <meta name="theme-color" content="#FAFAF8" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Тренировки" />
     <link rel="apple-touch-icon" href="./icon-192.png" />
     <link rel="icon" href="./icon.svg" />
-    <title>Мои тренировки — ваш личный ритм</title>
+    <title>Мои тренировки</title>
   </head>
   <body>
     <div id="root"></div>

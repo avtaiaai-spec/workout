@@ -32,4 +32,4 @@
 
 Иконки: **lucide-react**, ISC License, https://github.com/lucide-icons/lucide/blob/main/LICENSE. Их лицензия и уведомление об авторстве поставляются в npm-пакете. Интерфейсные иконки не используются вместо демонстрации движения.
 
-Шрифт: **Golos Text Variable**, Copyright 2019 The Golos Text Project Authors (https://github.com/googlefonts/golos-text). **SIL Open Font License 1.1**. Локальные файлы предоставлены пакетом `@fontsource-variable/golos-text`; полный текст лицензии включён в `public/licenses/Golos-Text-OFL.txt` и итоговую сборку. Внешние CDN шрифтов не используются.
+Интерфейс Mono Apricot использует системный стек `-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`; внешний или загружаемый шрифт для него не требуется. Файл лицензии Golos Text от прежнего оформления сохранён в `public/licenses/Golos-Text-OFL.txt` для совместимости материалов проекта; этот шрифт в текущем интерфейсе не подключается.

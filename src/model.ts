@@ -70,6 +70,8 @@ export const setSchema = z.object({
   done: z.boolean(),
   side: z.enum(["", "Л", "П"]),
   note: z.string(),
+  plannedRepsMax: z.number().int().min(0).max(10000).optional(),
+  recordedAt: z.number().finite().min(0).optional(),
 });
 export type WorkoutSet = z.infer<typeof setSchema>;
 export const itemSchema = z.object({
@@ -79,6 +81,7 @@ export const itemSchema = z.object({
   sets: z.array(setSchema).max(200),
   note: z.string(),
   skipped: z.boolean(),
+  remainingSkipped: z.boolean().optional(),
 });
 export type Item = z.infer<typeof itemSchema>;
 export const templateSchema = z.object({
@@ -87,6 +90,8 @@ export const templateSchema = z.object({
   note: z.string(),
   items: z.array(itemSchema).max(200),
   archived: z.boolean(),
+  draftStep: z.number().int().min(1).max(3).optional(),
+  draft: z.boolean().optional(),
 });
 export type Template = z.infer<typeof templateSchema>;
 export const sessionSchema = templateSchema.extend({
@@ -98,6 +103,10 @@ export const sessionSchema = templateSchema.extend({
   pausedMs: z.number().finite().min(0),
   status: z.enum(["active", "completed", "cancelled"]),
   occurrenceId: z.string().optional(),
+  currentItemId: z.string().optional(),
+  currentSetId: z.string().optional(),
+  originSessionId: z.string().optional(),
+  pinnedTechnique: z.boolean().optional(),
 });
 export type Session = z.infer<typeof sessionSchema>;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -160,7 +169,7 @@ export const measurementSchema = z.object({
 });
 export type Measurement = z.infer<typeof measurementSchema>;
 const currentStateSchema = z.object({
-  version: z.literal(2),
+  version: z.literal(3),
   measurements: z.array(measurementSchema).default([]),
   trainingDays: z.array(z.number().int().min(0).max(6)).default([]),
   retiredExercises: z.array(exerciseSchema).default([]),
@@ -187,13 +196,18 @@ const currentStateSchema = z.object({
   }),
 });
 export const stateSchema = z.preprocess((raw) => {
-  if (raw && typeof raw === "object" && "version" in raw && raw.version === 1)
+  if (
+    raw &&
+    typeof raw === "object" &&
+    "version" in raw &&
+    (raw.version === 1 || raw.version === 2)
+  )
     return {
       ...raw,
-      version: 2,
-      measurements: [],
-      retiredExercises: [],
-      trainingDays: [],
+      version: 3,
+      ...(!("measurements" in raw) ? { measurements: [] } : {}),
+      ...(!("retiredExercises" in raw) ? { retiredExercises: [] } : {}),
+      ...(!("trainingDays" in raw) ? { trainingDays: [] } : {}),
     };
   return raw;
 }, currentStateSchema);
@@ -259,16 +273,37 @@ export function createSession(
   t: Template,
   occurrenceId?: string,
   now = Date.now(),
+  history: Session[] = [],
 ): Session {
   return {
     ...structuredClone(t),
     id: uid(),
     templateId: t.id,
+    draft: false,
+    archived: false,
     items: t.items.map((i) => ({
-      ...i,
+      ...structuredClone(i),
       skipped: false,
-      sets: i.sets.map((s) => ({ ...s, done: false })),
+      remainingSkipped: false,
+      sets: i.sets.map((set, index) => {
+        const previous = previousSet(history, i, index);
+        return {
+          ...set,
+          ...(previous
+            ? {
+                weight: previous.weight,
+                reps: previous.reps,
+                seconds: previous.seconds,
+                distance: previous.distance,
+              }
+            : {}),
+          done: false,
+          recordedAt: undefined,
+        };
+      }),
     })),
+    currentItemId: t.items[0]?.id,
+    currentSetId: t.items[0]?.sets[0]?.id,
     status: "active",
     startedAt: now,
     endedAt: null,
@@ -380,6 +415,34 @@ export function occurrences(
       d = shiftDate(d, 1);
     }
   }
+  // A completed/active fact keeps its original plan link even if that series
+  // is later shortened. This also covers a future plan performed early.
+  for (const id of new Set(
+    state.sessions
+      .map((s) => s.occurrenceId)
+      .filter((id): id is string => !!id),
+  )) {
+    if (out.some((o) => o.id === id)) continue;
+    const split = id.lastIndexOf(":");
+    const originalDate = id.slice(split + 1);
+    if (split < 0 || !datePattern.test(originalDate)) continue;
+    const session =
+      state.sessions.find(
+        (s) => s.occurrenceId === id && s.status !== "cancelled",
+      ) ?? state.sessions.find((s) => s.occurrenceId === id)!;
+    const exception = state.exceptions.find((e) => e.id === id);
+    const date = exception?.date ?? originalDate;
+    if (date < from || date > to) continue;
+    out.push({
+      id,
+      ruleId: id.slice(0, split),
+      originalDate,
+      date,
+      templateId: session.templateId,
+      session,
+      status: session.status,
+    });
+  }
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 export function importBackup(
@@ -481,7 +544,9 @@ export function previousSet(
     .slice(0, index)
     .filter((s) => s.side === set.side).length;
   const candidate = prior.sets.filter((s) => s.side === set.side)[ordinal];
-  return candidate?.done ? candidate : undefined;
+  return candidate?.done && candidate.warmup === set.warmup
+    ? candidate
+    : undefined;
 }
 
 /** Template-only settings: one form per exercise, expanded into independent actual sets at start. */
@@ -494,6 +559,7 @@ export function configureExercise(
     seconds?: number;
     distance?: number;
     rest?: number;
+    plannedRepsMax?: number;
   },
 ) {
   const unilateral = item.exercise.id === "cable-kickback";
@@ -515,7 +581,12 @@ export function configureExercise(
         ...base,
         ...old,
         ...(values.weight !== undefined ? { weight: values.weight } : {}),
-        ...(values.reps !== undefined ? { reps: values.reps } : {}),
+        ...(values.reps !== undefined
+          ? { reps: values.reps, plannedRepsMax: values.plannedRepsMax }
+          : {}),
+        ...(values.plannedRepsMax !== undefined
+          ? { plannedRepsMax: values.plannedRepsMax }
+          : {}),
         ...(values.seconds !== undefined ? { seconds: values.seconds } : {}),
         ...(values.rest !== undefined ? { rest: values.rest } : {}),
         ...(values.distance !== undefined ? { distance: values.distance } : {}),
@@ -546,4 +617,94 @@ export function saveWeeklyPlan(
   for (const [templateId, weekdays] of grouped)
     state.rules.push({ id: uid(), templateId, start, weekdays, once: false });
   state.trainingDays = days;
+}
+
+/** Start a factual session without creating a template or schedule. */
+export function createUnplannedSession(now = Date.now()): Session {
+  const source: Template = {
+    id: "",
+    name: "Тренировка без плана",
+    note: "",
+    items: [],
+    archived: false,
+  };
+  return createSession(source, undefined, now);
+}
+export function repeatSession(source: Session, now = Date.now()): Session {
+  const next = createSession(source, undefined, now);
+  next.templateId = source.templateId;
+  next.originSessionId = source.id;
+  return next;
+}
+export function templateFromSession(
+  source: Session,
+  name = source.name,
+): Template {
+  return {
+    id: uid(),
+    name,
+    note: source.note,
+    archived: false,
+    items: source.items
+      .filter((i) => !i.skipped)
+      .map((i) => ({
+        ...structuredClone(i),
+        id: uid(),
+        skipped: false,
+        remainingSkipped: false,
+        sets: i.sets.map((s) => ({
+          ...s,
+          id: uid(),
+          done: false,
+          recordedAt: undefined,
+        })),
+      })),
+  };
+}
+/** Main button and row checkbox share this idempotent write. */
+export function markSet(
+  session: Session,
+  itemId: string,
+  setId: string,
+  done: boolean,
+  now = Date.now(),
+) {
+  const item = session.items.find((i) => i.id === itemId);
+  const set = item?.sets.find((s) => s.id === setId);
+  if (!set || !item || item.skipped || session.pausedAt || set.done === done)
+    return false;
+  set.done = done;
+  if (done && item.remainingSkipped) item.remainingSkipped = false;
+  set.recordedAt = done ? now : undefined;
+  return true;
+}
+/** Keep every recorded set when replacing work that has not been done yet. */
+export function replaceRemainingWork(
+  session: Template,
+  itemId: string,
+  replacements: Item[],
+) {
+  const index = session.items.findIndex((i) => i.id === itemId);
+  if (index < 0) return;
+  const old = session.items[index];
+  const done = old.sets.filter((s) => s.done);
+  const pending = old.sets.filter((s) => !s.done);
+  if (done.length && !pending.length) return;
+  if (done.length && replacements.length === 1) {
+    const next = replacements[0];
+    if (next.exercise.id !== "cable-kickback")
+      next.sets = pending.map((s, n) => ({
+        ...(next.sets[n] ?? next.sets[0] ?? makeSet(s.rest)),
+        id: uid(),
+        rest: s.rest,
+        done: false,
+        recordedAt: undefined,
+      }));
+  }
+  session.items.splice(
+    index,
+    1,
+    ...(done.length ? [{ ...old, skipped: false, sets: done }] : []),
+    ...replacements,
+  );
 }

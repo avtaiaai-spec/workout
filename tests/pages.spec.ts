@@ -10,9 +10,7 @@ test("GitHub Pages: ресурсы, манифест и офлайн в подп
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/workout/#catalog");
-  await expect(
-    page.getByRole("heading", { name: /Упражнения17/ }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Каталог17/ })).toBeVisible();
   const response = await page.request.get("/workout/manifest.webmanifest");
   expect(response.ok()).toBe(true);
   const manifest = await response.json();
@@ -36,27 +34,12 @@ test("GitHub Pages: ресурсы, манифест и офлайн в подп
   expect(scope).toContain("/workout/");
   await context.setOffline(true);
   await page.reload();
-  await expect(
-    page.getByRole("heading", { name: /Упражнения17/ }),
-  ).toBeVisible();
-  const fontCount = await page.evaluate(async () => {
-    const faces = await document.fonts.load(
-      '16px "Golos Text Variable"',
-      "Тренировки 0123",
-    );
-    return faces.filter((f) => f.status === "loaded").length;
-  });
-  expect(fontCount).toBeGreaterThan(0);
+  await expect(page.getByRole("heading", { name: /Каталог17/ })).toBeVisible();
   expect(
-    await page.evaluate(() =>
-      document.fonts.check('16px "Golos Text Variable"', "Тренировки 0123"),
-    ),
-  ).toBe(true);
-  expect(
-    await page.evaluate(async () =>
-      (await fetch("./licenses/Golos-Text-OFL.txt")).text(),
-    ),
-  ).toContain("SIL OPEN FONT LICENSE");
+    await page
+      .locator("body")
+      .evaluate((el) => getComputedStyle(el).fontFamily),
+  ).toContain("Segoe UI");
   await page.getByLabel("Поиск упражнений").fill("Смита");
   await page.locator(".exercise-info").first().click();
   await expect(

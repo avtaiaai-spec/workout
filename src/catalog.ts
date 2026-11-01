@@ -279,7 +279,7 @@ export function seedTemplates(): Template[] {
 }
 export function initialState(): State {
   return {
-    version: 2,
+    version: 3,
     seeded: ["curated-v2"],
     exercises: structuredClone(catalog),
     retiredExercises: [],
