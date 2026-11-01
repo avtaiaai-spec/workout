@@ -10,6 +10,7 @@ import {
   Dumbbell,
 } from "lucide-react";
 import { useStore } from "./store";
+import { WeeklyPlanner } from "./WeeklyPlanner";
 import { Illustration } from "./Illustration";
 import {
   Template,
@@ -112,13 +113,16 @@ export function Today({
               const complete = state.sessions.some(
                 (s) => s.date === date && s.status === "completed",
               );
+              const trainingDay = state.trainingDays.includes(
+                asDate(date).getDay(),
+              );
               const planned = occurrences(state, date, date).some(
                 (o) => o.status === "planned",
               );
               return (
                 <button
                   key={date}
-                  aria-label={`${asDate(date).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}${complete ? ", тренировка завершена" : planned ? ", есть план" : ""}`}
+                  aria-label={`${asDate(date).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}${complete ? ", тренировка завершена" : planned ? ", есть план" : trainingDay ? ", тренировочный день" : ""}`}
                   aria-pressed={selected === date}
                   aria-current={date === today ? "date" : undefined}
                   className={`${selected === date ? "selected" : ""} ${date === today ? "today" : ""} ${complete ? "complete" : ""}`}
@@ -131,6 +135,8 @@ export function Today({
                       <Check size={16} />
                     ) : planned ? (
                       <i />
+                    ) : trainingDay ? (
+                      <span aria-hidden="true">○</span>
                     ) : (
                       <em>—</em>
                     )}
@@ -141,6 +147,14 @@ export function Today({
           )}
         </div>
       </section>
+      <WeeklyPlanner onCreate={onNew} />
+      <a className="body-shortcut panel" href="#body">
+        <span>
+          <strong>Мои замеры</strong>
+          <small>Вес, обхваты и динамика</small>
+        </span>
+        <ArrowUpRight size={22} />
+      </a>
       <div className="today-layout">
         <div className="today-main">
           <section className="hero-card">
@@ -153,7 +167,7 @@ export function Today({
                     ? "ЗАПЛАНИРОВАНО НА ЭТОТ ДЕНЬ"
                     : "В ВАШЕМ ТЕМПЕ"}
               </span>
-              <h2>{template?.name ?? "Время для движения"}</h2>
+              <h2>{template?.name ?? "Создайте свою первую тренировку"}</h2>
               {template ? (
                 <div className="workout-meta">
                   <span>
@@ -169,7 +183,9 @@ export function Today({
               )}
               {!active && !scheduled && (
                 <p className="hero-hint">
-                  На этот день планов нет. Можно начать с любимой тренировки.
+                  {templates.length
+                    ? "На этот день планов нет. Можно начать с любимой тренировки."
+                    : "Добавьте упражнения, укажите вес, подходы и повторения. Затем выберите тренировочные дни выше."}
                 </p>
               )}
               <button
@@ -185,12 +201,21 @@ export function Today({
                 }
               >
                 <Play size={20} />
-                {active ? "Продолжить тренировку" : "Начать тренировку"}
+                {active
+                  ? "Продолжить тренировку"
+                  : template
+                    ? "Начать тренировку"
+                    : "Создать тренировку"}
                 <ArrowUpRight size={18} />
               </button>
-              <button className="hero-secondary text-button" onClick={onChoose}>
-                Выбрать другую тренировку <ChevronRight size={17} />
-              </button>
+              {!!templates.length && (
+                <button
+                  className="hero-secondary text-button"
+                  onClick={onChoose}
+                >
+                  Выбрать другую тренировку <ChevronRight size={17} />
+                </button>
+              )}
             </div>
             {template?.items[0] && (
               <div className="hero-illustration">

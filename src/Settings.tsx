@@ -13,6 +13,7 @@ import { useStore } from "./store";
 import { Modal } from "./ui";
 import { importBackup, localDate } from "./model";
 import { csv, download } from "./storage";
+import { migrate } from "./catalog";
 export function Settings({ onClose }: { onClose: () => void }) {
   const { state, change, replace, toast } = useStore();
   const [mode, setMode] = useState<"merge" | "replace">("merge");
@@ -32,7 +33,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
   }
   function restore() {
     try {
-      const next = importBackup(pending, state, mode);
+      const next = migrate(importBackup(pending, state, mode));
       replace(next);
       setPending(undefined);
       setError("");
@@ -117,8 +118,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
           />
         </label>
         <p className="muted">
-          В готовых шаблонах отдых 90 с — значение по умолчанию, а не параметр
-          со скриншотов. Звук при заблокированном iPhone не гарантируется.
+          В готовых тренировках отдых 90 с задан по умолчанию. Вы можете выбрать
+          другое время. Звук при заблокированном iPhone не гарантируется.
         </p>
       </section>
       <section className="settings-section">

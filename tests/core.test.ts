@@ -6,6 +6,7 @@ import {
   seedTemplates,
   migrate,
   mandatoryIds,
+  addPersonalTemplates,
 } from "../src/catalog";
 import {
   stateSchema,
@@ -21,6 +22,11 @@ import {
   previousSet,
 } from "../src/model";
 import { writeState, readState, csv } from "../src/storage";
+const preparedState = () => {
+  const s = initialState();
+  addPersonalTemplates(s);
+  return s;
+};
 const expected = [
   [
     ["smith-bench", 4, 10, 20],
@@ -39,7 +45,7 @@ const expected = [
     ["hip-adduction", 3, 15, 41],
   ],
   [
-    ["dumbbell-plie", 4, 10, 20],
+    ["kettlebell-plie", 4, 10, 20],
     ["dumbbell-rdl", 4, 10, 25],
     ["glute-hyperextension", 4, 12, 10],
     ["lying-leg-curl", 4, 12, 21.4],
@@ -48,13 +54,10 @@ const expected = [
   ],
 ];
 describe("Точный каталог и персональные шаблоны", () => {
-  it("17 уникальных обязательных движений и 60+ упражнений во всех категориях", () => {
+  it("Только 17 выбранных упражнений, отдельные варианты и содержательная техника", () => {
     expect(mandatoryIds).toHaveLength(17);
     expect(new Set(catalog.map((e) => e.id)).size).toBe(catalog.length);
-    expect(catalog.length).toBeGreaterThanOrEqual(60);
-    expect(categories.every((c) => catalog.some((e) => e.category === c))).toBe(
-      true,
-    );
+    expect(catalog).toHaveLength(17);
     for (const id of mandatoryIds)
       expect(
         catalog.find((e) => e.id === id)?.technique.length,
@@ -95,7 +98,7 @@ describe("Точный каталог и персональные шаблоны
     expect(t[2].items[1].accounting).toBe("unknown");
   });
   it("обновление не дублирует шаблоны и не перезаписывает пользовательские изменения", () => {
-    const state = initialState();
+    const state = preparedState();
     state.templates[0].name = "Моя версия";
     state.templates[0].items[0].sets[0].weight = 33.7;
     expect(migrate(migrate(state))).toEqual(state);
@@ -105,7 +108,7 @@ describe("Точный каталог и персональные шаблоны
 });
 describe("Занятия, время и статистика", () => {
   it("снимок не зависит от шаблона, учитывает только завершённые выполненные подходы", () => {
-    const state = initialState();
+    const state = preparedState();
     const s = createSession(state.templates[0]);
     s.items[0].sets[0].done = true;
     s.items[0].sets[0].weight = 21.5;
@@ -156,7 +159,7 @@ describe("Занятия, время и статистика", () => {
 });
 describe("Расписание и исключения", () => {
   it("переносит только одну дату и сохраняет серию", () => {
-    const state = initialState();
+    const state = preparedState();
     state.rules = [
       {
         id: "r",
@@ -186,7 +189,7 @@ describe("Расписание и исключения", () => {
     );
   });
   it("изменение серии не переписывает прошлые даты", () => {
-    const state = initialState();
+    const state = preparedState();
     state.rules = [
       {
         id: "old",
@@ -215,7 +218,7 @@ describe("Расписание и исключения", () => {
 });
 describe("IndexedDB и импорт", () => {
   it("восстанавливает активное занятие, отметки, оба таймера и дробный вес", async () => {
-    const state = initialState();
+    const state = preparedState();
     const s = createSession(state.templates[0]);
     s.items[0].sets[0].weight = 22.6;
     s.items[0].sets[0].done = true;
@@ -232,7 +235,7 @@ describe("IndexedDB и импорт", () => {
     expect(restored.sessions[0].status).toBe("active");
   });
   it("полная копия восстанавливается, повторный импорт не создаёт дублей", () => {
-    const state = initialState();
+    const state = preparedState();
     state.exercises.push({
       ...state.exercises[0],
       id: "custom",
@@ -246,7 +249,7 @@ describe("IndexedDB и импорт", () => {
     ).toEqual(state);
   });
   it("отклоняет неправильную версию, отрицательные веса, дубли ID и два активных занятия, не меняя данные", () => {
-    const current = initialState();
+    const current = preparedState();
     const snapshot = JSON.stringify(current);
     expect(() => importBackup({ version: 2 }, current, "replace")).toThrow();
     const raw = structuredClone(current);
@@ -264,7 +267,7 @@ describe("IndexedDB и импорт", () => {
     expect(JSON.stringify(current)).toBe(snapshot);
   });
   it("CSV содержит только выполненные подходы завершённых занятий", () => {
-    const state = initialState();
+    const state = preparedState();
     const s = createSession(state.templates[0]);
     state.sessions = [s];
     s.items[0].sets[0].done = true;
@@ -276,7 +279,7 @@ describe("IndexedDB и импорт", () => {
 
 describe("Дополнительные границы календаря и импорта", () => {
   it("показывает перенесённую назад дату, даже если исходная дата за пределами видимого диапазона", () => {
-    const state = initialState();
+    const state = preparedState();
     state.rules = [
       {
         id: "r",
@@ -300,7 +303,7 @@ describe("Дополнительные границы календаря и им
     expect(events[0].originalDate).toBe("2026-11-09");
   });
   it("сохраняет отменённое занятие в календаре без статистики", () => {
-    const state = initialState();
+    const state = preparedState();
     state.rules = [
       {
         id: "r",
@@ -319,7 +322,7 @@ describe("Дополнительные границы календаря и им
     expect(stats(state.sessions).count).toBe(0);
   });
   it("отклоняет невозможную дату и нарушенные ссылки расписания", () => {
-    const state = initialState();
+    const state = preparedState();
     const bad = structuredClone(state);
     bad.rules = [
       {

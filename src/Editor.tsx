@@ -580,7 +580,7 @@ export function WorkoutEditor({
                         )}
                         <details className="set-options">
                           <summary>
-                            Параметры {set.side || ""}
+                            Заметка, отдых и разминка · {set.side || ""}
                             {n + 1}
                           </summary>
                           <div className="set-options-content">
@@ -654,7 +654,7 @@ export function WorkoutEditor({
                               }
                             >
                               <Copy size={15} />
-                              Параметры всем
+                              Применить ко всем
                             </button>
                             <button
                               className="text-button danger-text"
@@ -891,7 +891,7 @@ export function WorkoutEditor({
             onClick={() => {
               if (
                 !confirm(
-                  "Заменить состав и параметры исходного шаблона результатами этого занятия?",
+                  "Заменить состав и значения исходного шаблона результатами этого занятия?",
                 )
               )
                 return;

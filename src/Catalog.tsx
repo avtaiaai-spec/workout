@@ -65,7 +65,12 @@ export function Catalog({
         </button>
       </div>
       <div className="catalog-categories">
-        {["Все", ...categories].map((c, i) => (
+        {[
+          "Все",
+          ...categories.filter((c) =>
+            state.exercises.some((e) => e.category === c),
+          ),
+        ].map((c, i) => (
           <button
             key={c}
             className={`category-card cat-${i % 4} ${category === c ? "selected" : ""}`}
@@ -238,7 +243,7 @@ export function ExerciseDetail({
         <>
           <Illustration exercise={e} />
           <span className="offline-note">
-            ✓ Схема и описание доступны без интернета
+            ✓ Иллюстрация и описание доступны без интернета
           </span>
           <h3>Как выполнять</h3>
           <ol className="technique">

@@ -351,6 +351,13 @@ export function Progress({
           </label>
         </div>
       )}
+      <a href="#body" className="body-shortcut panel">
+        <span>
+          <strong>Вес и обхваты тела</strong>
+          <small>Открыть замеры и динамику</small>
+        </span>
+        <ArrowUpRight size={22} />
+      </a>
       <div className="stat-grid">
         <Stat label="Тренировок" value={totals.count} icon={<Dumbbell />} />
         <Stat

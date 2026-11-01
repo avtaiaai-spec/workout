@@ -124,8 +124,46 @@ export const exceptionSchema = z.object({
   date: dateSchema,
   cancelled: z.boolean(),
 });
-export const stateSchema = z.object({
-  version: z.literal(1),
+export const measurementFields = {
+  weight: { label: "Вес", unit: "кг", max: 700 },
+  chest: { label: "Грудь", unit: "см", max: 400 },
+  waist: { label: "Талия", unit: "см", max: 400 },
+  hips: { label: "Бёдра", unit: "см", max: 400 },
+  neck: { label: "Шея", unit: "см", max: 150 },
+  armLeft: { label: "Левый бицепс", unit: "см", max: 150 },
+  armRight: { label: "Правый бицепс", unit: "см", max: 150 },
+  thighLeft: { label: "Левое бедро", unit: "см", max: 200 },
+  thighRight: { label: "Правое бедро", unit: "см", max: 200 },
+  calfLeft: { label: "Левая голень", unit: "см", max: 150 },
+  calfRight: { label: "Правая голень", unit: "см", max: 150 },
+} as const;
+export type MeasurementKey = keyof typeof measurementFields;
+const bodyValuesSchema = z
+  .object(
+    Object.fromEntries(
+      Object.entries(measurementFields).map(([key, field]) => [
+        key,
+        z.number().finite().positive().max(field.max).optional(),
+      ]),
+    ) as Record<MeasurementKey, z.ZodOptional<z.ZodNumber>>,
+  )
+  .refine(
+    (v) => Object.values(v).some((n) => n !== undefined),
+    "Добавьте хотя бы один замер",
+  );
+export const measurementSchema = z.object({
+  id: z.string().min(1),
+  date: dateSchema,
+  createdAt: z.number().finite().min(0),
+  values: bodyValuesSchema,
+  note: z.string(),
+});
+export type Measurement = z.infer<typeof measurementSchema>;
+const currentStateSchema = z.object({
+  version: z.literal(2),
+  measurements: z.array(measurementSchema).default([]),
+  trainingDays: z.array(z.number().int().min(0).max(6)).default([]),
+  retiredExercises: z.array(exerciseSchema).default([]),
   seeded: z.array(z.string()),
   exercises: z.array(exerciseSchema),
   favorites: z.array(z.string()),
@@ -148,7 +186,18 @@ export const stateSchema = z.object({
     defaultRest: z.number().int().min(0).max(3600),
   }),
 });
-export type State = z.infer<typeof stateSchema>;
+export const stateSchema = z.preprocess((raw) => {
+  if (raw && typeof raw === "object" && "version" in raw && raw.version === 1)
+    return {
+      ...raw,
+      version: 2,
+      measurements: [],
+      retiredExercises: [],
+      trainingDays: [],
+    };
+  return raw;
+}, currentStateSchema);
+export type State = z.infer<typeof currentStateSchema>;
 export const uid = () => crypto.randomUUID();
 export function localDate(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -196,7 +245,12 @@ export function makeItem(e: Exercise, rest = 90): Item {
     id: uid(),
     exercise: structuredClone(e),
     accounting: e.accounting,
-    sets: Array.from({ length: 3 }, () => makeSet(rest)),
+    sets: (e.id === "cable-kickback" ? ["Л", "П"] : [""]).flatMap((side) =>
+      Array.from({ length: 3 }, () => ({
+        ...makeSet(rest),
+        side: side as WorkoutSet["side"],
+      })),
+    ),
     note: "",
     skipped: false,
   };
@@ -360,6 +414,8 @@ export function importBackup(
       parsed.sessions,
       parsed.rules,
       parsed.exceptions,
+      parsed.measurements,
+      parsed.retiredExercises,
     ].every(unique)
   )
     throw Error("В файле повторяются идентификаторы");
@@ -383,6 +439,11 @@ export function importBackup(
     sessions: merge(current.sessions, parsed.sessions),
     rules: merge(current.rules, parsed.rules),
     exceptions: merge(current.exceptions, parsed.exceptions),
+    measurements: merge(current.measurements, parsed.measurements),
+    retiredExercises: merge(current.retiredExercises, parsed.retiredExercises),
+    trainingDays: [
+      ...new Set([...current.trainingDays, ...parsed.trainingDays]),
+    ],
   };
   if (result.sessions.filter((s) => s.status === "active").length > 1)
     throw Error(
@@ -421,4 +482,68 @@ export function previousSet(
     .filter((s) => s.side === set.side).length;
   const candidate = prior.sets.filter((s) => s.side === set.side)[ordinal];
   return candidate?.done ? candidate : undefined;
+}
+
+/** Template-only settings: one form per exercise, expanded into independent actual sets at start. */
+export function configureExercise(
+  item: Item,
+  values: {
+    count?: number;
+    weight?: number;
+    reps?: number;
+    seconds?: number;
+    distance?: number;
+    rest?: number;
+  },
+) {
+  const unilateral = item.exercise.id === "cable-kickback";
+  const count =
+    values.count ??
+    (unilateral
+      ? item.sets.filter((s) => s.side === "Л").length ||
+        item.sets.filter((s) => s.side === "П").length ||
+        item.sets.length ||
+        3
+      : item.sets.length || 3);
+  const base = item.sets[0] ?? makeSet();
+  const sides: WorkoutSet["side"][] = unilateral ? ["Л", "П"] : [""];
+  const existing = item.sets;
+  item.sets = sides.flatMap((side) =>
+    Array.from({ length: Math.max(1, Math.min(50, count)) }, (_, n) => {
+      const old = existing.filter((s) => s.side === side)[n];
+      return {
+        ...base,
+        ...old,
+        ...(values.weight !== undefined ? { weight: values.weight } : {}),
+        ...(values.reps !== undefined ? { reps: values.reps } : {}),
+        ...(values.seconds !== undefined ? { seconds: values.seconds } : {}),
+        ...(values.rest !== undefined ? { rest: values.rest } : {}),
+        ...(values.distance !== undefined ? { distance: values.distance } : {}),
+        id: old?.id ?? uid(),
+        side,
+        done: false,
+      };
+    }),
+  );
+}
+export function saveWeeklyPlan(
+  state: State,
+  assignments: Record<number, string[]>,
+  start = localDate(),
+) {
+  const days = Object.keys(assignments)
+    .map(Number)
+    .filter((n) => n >= 0 && n <= 6);
+  for (const r of state.rules)
+    if (!r.once && (!r.end || r.end >= start)) r.end = shiftDate(start, -1);
+  const grouped = new Map<string, number[]>();
+  for (const day of days)
+    for (const templateId of new Set(assignments[day])) {
+      if (!state.templates.some((t) => t.id === templateId && !t.archived))
+        continue;
+      grouped.set(templateId, [...(grouped.get(templateId) ?? []), day]);
+    }
+  for (const [templateId, weekdays] of grouped)
+    state.rules.push({ id: uid(), templateId, start, weekdays, once: false });
+  state.trainingDays = days;
 }

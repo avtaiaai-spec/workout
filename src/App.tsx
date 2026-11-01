@@ -18,12 +18,16 @@ import {
   WifiOff,
   CircleHelp,
   MoreHorizontal,
+  Ruler,
 } from "lucide-react";
 import { useStore } from "./store";
 import { Catalog, ExerciseDetail, CustomExercise } from "./Catalog";
 import { Calendar, ScheduleForm } from "./Schedule";
 import { Progress, Stat } from "./Progress";
 import { WorkoutEditor } from "./Editor";
+import { TemplateEditor } from "./TemplateEditor";
+import { Measurements } from "./Measurements";
+import { addPersonalTemplates } from "./catalog";
 import { Settings } from "./Settings";
 import { Timers } from "./Timers";
 import { Modal, Empty } from "./ui";
@@ -51,6 +55,7 @@ const nav = [
   ["catalog", "Упражнения", Archive],
   ["calendar", "Календарь", CalendarDays],
   ["progress", "Прогресс", BarChart3],
+  ["body", "Замеры тела", Ruler],
 ] as const;
 const go = (route: string) => {
   location.hash = route;
@@ -300,6 +305,36 @@ export default function App() {
                   Создать тренировку
                 </button>
               </div>
+              {!state.templates.length && (
+                <Empty
+                  title="Ваши тренировки — с чистого листа"
+                  icon={<Dumbbell />}
+                >
+                  <p>
+                    Создайте тренировку, выберите упражнения и задайте вес,
+                    подходы, повторения и отдых.
+                  </p>
+                  <button className="button primary full" onClick={newTemplate}>
+                    Создать первую тренировку
+                  </button>
+                </Empty>
+              )}
+              {!state.templates.some((t) =>
+                t.id.startsWith("personal-template-v1-"),
+              ) && (
+                <button
+                  className="text-button text-link preset-button"
+                  onClick={() => {
+                    change(addPersonalTemplates);
+                    toast(
+                      "Три готовые тренировки добавлены. Их можно изменить.",
+                    );
+                  }}
+                >
+                  <Plus size={18} />
+                  Добавить мои три готовые тренировки
+                </button>
+              )}
               <div className="filter-bar">
                 <button
                   className={
@@ -334,7 +369,7 @@ export default function App() {
                         <h2>{t.name}</h2>
                         <p>
                           {t.items.reduce((n, i) => n + i.sets.length, 0)}{" "}
-                          подходов · параметры редактируются
+                          подходов · можно изменить
                         </p>
                         <div className="template-preview">
                           {t.items.slice(0, 3).map((it) => (
@@ -401,7 +436,7 @@ export default function App() {
                   ))}
               </div>
               <p className="footnote">
-                Готовые шаблоны перенесены из ваших требований. Веса не являются
+                Готовые тренировки можно добавить отдельно. Веса не являются
                 автоматически рассчитанными рекомендациями. Дни недели вы
                 назначаете самостоятельно.
               </p>
@@ -444,12 +479,25 @@ export default function App() {
               onSession={(id) => go(`session/${id}`)}
               onExercise={setInfo}
             />
-          ) : page === "edit" || page === "session" ? (
+          ) : page === "body" ? (
+            <Measurements />
+          ) : page === "edit" ? (
+            <TemplateEditor
+              id={id}
+              onBack={() => go("workouts")}
+              onInfo={setInfo}
+              onStart={start}
+              onAdd={(replace) => {
+                setTarget({ id, session: false, replace });
+                go("catalog");
+              }}
+            />
+          ) : page === "session" ? (
             <WorkoutEditor
               key={route}
               id={id}
               session={page === "session"}
-              onBack={() => go(page === "edit" ? "workouts" : "progress")}
+              onBack={() => go("progress")}
               onInfo={setInfo}
               onStart={start}
               onAdd={(replace) => {
@@ -476,16 +524,22 @@ export default function App() {
         </main>
       </div>
       <nav className="bottom-nav">
-        {nav.map(([key, label, Icon]) => (
-          <a
-            key={key}
-            href={`#${key}`}
-            className={page === key ? "active" : ""}
-          >
-            <Icon size={21} />
-            <span>{label}</span>
-          </a>
-        ))}
+        {nav
+          .filter((n) => n[0] !== "body")
+          .map(([key, label, Icon]) => (
+            <a
+              key={key}
+              href={`#${key}`}
+              className={
+                page === key || (page === "body" && key === "progress")
+                  ? "active"
+                  : ""
+              }
+            >
+              <Icon size={21} />
+              <span>{label}</span>
+            </a>
+          ))}
       </nav>
       {info && (
         <ExerciseDetail

@@ -94,11 +94,15 @@ export function NumberInput({
   onChange,
   label,
   integer = false,
+  min = 0,
+  max = 10000,
 }: {
   value: number;
   onChange: (n: number) => void;
   label: string;
   integer?: boolean;
+  min?: number;
+  max?: number;
 }) {
   const [text, setText] = useState(String(value).replace(".", ","));
   const focused = useRef(false);
@@ -109,8 +113,8 @@ export function NumberInput({
     const n = Number(raw.replace(",", "."));
     return raw.trim() !== "" &&
       Number.isFinite(n) &&
-      n >= 0 &&
-      n <= 10000 &&
+      n >= min &&
+      n <= max &&
       (!integer || Number.isInteger(n))
       ? n
       : null;

@@ -11,7 +11,7 @@ test("GitHub Pages: ресурсы, манифест и офлайн в подп
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/workout/#catalog");
   await expect(
-    page.getByRole("heading", { name: /Упражнения74/ }),
+    page.getByRole("heading", { name: /Упражнения17/ }),
   ).toBeVisible();
   const response = await page.request.get("/workout/manifest.webmanifest");
   expect(response.ok()).toBe(true);
@@ -37,7 +37,7 @@ test("GitHub Pages: ресурсы, манифест и офлайн в подп
   await context.setOffline(true);
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: /Упражнения74/ }),
+    page.getByRole("heading", { name: /Упражнения17/ }),
   ).toBeVisible();
   const fontCount = await page.evaluate(async () => {
     const faces = await document.fonts.load(
@@ -60,7 +60,7 @@ test("GitHub Pages: ресурсы, манифест и офлайн в подп
   await page.getByLabel("Поиск упражнений").fill("Смита");
   await page.locator(".exercise-info").first().click();
   await expect(
-    page.getByRole("dialog").locator(".illustration svg[role=img]"),
-  ).toHaveCount(2);
+    page.getByRole("dialog").locator(".exercise-photo > img"),
+  ).toHaveCount(1);
   expect(errors).toEqual([]);
 });

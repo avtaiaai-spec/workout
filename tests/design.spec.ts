@@ -24,6 +24,14 @@ async function readData(page: Page) {
   );
 }
 async function seedVisualData(page: Page) {
+  await page.goto("/#workouts");
+  const presets = page.getByRole("button", {
+    name: "Добавить мои три готовые тренировки",
+    exact: true,
+  });
+  if (await presets.isVisible()) await presets.click();
+  await expect(page.locator(".template-card")).toHaveCount(3);
+  await page.goto("/#today");
   await page.evaluate(
     () =>
       new Promise<void>((resolve) => {
@@ -83,6 +91,22 @@ async function seedVisualData(page: Page) {
                 start: today,
                 weekdays: [],
                 once: true,
+              },
+            ];
+            state.measurements = [
+              {
+                id: "body-a",
+                date: yesterday,
+                createdAt: Date.now() - 86400000,
+                values: { weight: 70.4, waist: 80.5, hips: 100 },
+                note: "Первый замер",
+              },
+              {
+                id: "body-b",
+                date: today,
+                createdAt: Date.now(),
+                values: { weight: 69.2, waist: 79.4, hips: 99.6 },
+                note: "Второй замер",
               },
             ];
             state.restEnd = Date.now() + 90000;
@@ -192,6 +216,7 @@ for (const width of [360, 1440])
         "catalog",
         "calendar",
         "progress",
+        "body",
         "edit/personal-template-v1-0",
         "session/design-active",
       ]) {
@@ -265,8 +290,8 @@ for (const width of [360, 1440])
         .getByRole("button", { name: /Техника:/ })
         .click();
       await expect(
-        page.getByRole("dialog").locator(".illustration svg[role=img]"),
-      ).toHaveCount(2);
+        page.getByRole("dialog").locator(".exercise-photo > img"),
+      ).toHaveCount(1);
       await page.screenshot({
         path: `test-results/calm-${theme}-${width}-technique.png`,
         fullPage: true,
